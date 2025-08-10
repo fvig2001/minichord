@@ -922,7 +922,7 @@ void detectSlash() {
   }
 }
 
-void updateNotes() {
+void updateChordNotes() {
   for (int i = 0; i < 7; i++) {
     current_chord_notes[i] = calculate_note_chord(i, slash_chord, sharp_active);
   }
@@ -937,6 +937,11 @@ void updateNotes() {
         current_applied_chord_notes[i] = current_chord_notes[i];
       }
     }
+  }
+}
+
+void updateHarpNotes() {
+  if (button_pushed) {
     for (int i = 0; i < 12; i++) {
       current_harp_notes[i] = calculate_note_harp(i, slash_chord, sharp_active);
       if (change_held_strings && harp_started_notes[i] != 0) {
@@ -1144,7 +1149,8 @@ void loop() {
     bool button_min = chord_matrix_array[2 + current_line * 3].read_value();
     bool button_seventh = chord_matrix_array[3 + current_line * 3].read_value();
     handleChordType(button_maj, button_min, button_seventh);
-    updateNotes();
+    updateChordNotes(); // Replaced updateNotes() with updateChordNotes()
+    updateHarpNotes();  // Added call to updateHarpNotes()
     triggerChordNotes();
   }
 
