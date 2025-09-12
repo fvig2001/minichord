@@ -68,7 +68,7 @@ This touch zone can be "strummed" by sweeping the finger across all sections, or
 
 ## ③ Preset selection buttons and indicator
 
-The preset selection buttons can be used to switch between presets. **The minichord has 12 internal presets** (see ["Default presets"](#default-presets)), that can be replaced by custom presets (see ["Making custom presets"](#custom-presets)). Going up after the 12th preset will circle back to the first, same as going down before the first will circle back to the 12th. 
+The preset selection buttons can be used to switch between presets. **The minichord has 12 internal presets**, that can be replaced by custom presets (see ["Making custom presets"](#custom-presets)). Going up after the 12th preset will circle back to the first, same as going down before the first will circle back to the 12th. 
 
 The main led will shine with a different color for each preset to help you identify the current selected one. 
 
@@ -139,13 +139,13 @@ To do that simply **push any button from the column of the note you wish to borr
 ![combining across columns](./ressources/drawing_11.png "combining across columns")
 
 
-Usually, the replaced note is the fundamental of the chord and the substitution is known as a "slash chord", written for example Am/E for an A minor chord with E as the fundamental. However, this is not the case for all presets. That setting is indicated per preset in the [Default presets](#default-presets) section.
+Usually, the replaced note is the fundamental of the chord and the substitution is known as a "slash chord", written for example Am/E for an A minor chord with E as the fundamental. However, this is not the case for all presets. 
 
 >⚠ Due to the way the "sharp" button works, some slash chords are impossible to do on the minichord. For example, Am/G is possible, Am#/G# is possible (by holding the "sharp" modifier button), but Am#/G is not. 
 
 ## Secondary potentiometer functions
 
-Each of the potentiometers allows you to access a secondary function. The specific secondary function will depend on the selected preset, and is indicated per preset in the [Default presets](#default-presets) section.
+Each of the potentiometers allows you to access a secondary function. The specific secondary function will depend on the selected preset.
 
 **To access the secondary function, you need to hold the "sharp button" while turning the potentiometer.**
 
