@@ -12,7 +12,7 @@
 #include <potentiometer.h>
 
 //>>SOFWTARE VERSION 
-int version_ID=0006; //to be read 00.03, stored at adress 7 in memory
+int version_ID=0007; //to be read 00.03, stored at adress 7 in memory
 //>>BUTTON ARRAYS<<
 debouncer harp_array[12];
 debouncer chord_matrix_array[22];
@@ -169,6 +169,7 @@ AudioMixer4 *chord_vibrato_mixer_array[4] = {&voice1_vibrato_mixer, &voice2_vibr
 AudioSynthWaveformModulated *chord_osc_1_array[4] = {&voice1_osc1, &voice2_osc1, &voice3_osc1, &voice4_osc1};
 AudioSynthWaveformModulated *chord_osc_2_array[4] = {&voice1_osc2, &voice2_osc2, &voice3_osc2, &voice4_osc2};
 AudioSynthWaveformModulated *chord_osc_3_array[4] = {&voice1_osc3, &voice2_osc3, &voice3_osc3, &voice4_osc3};
+AudioSynthWaveformDc *chord_freq_dc_array[4]= {&voice1_frequency_dc, &voice2_frequency_dc, &voice3_frequency_dc, &voice4_frequency_dc};
 AudioSynthNoiseWhite *chord_noise_array[4] = {&voice1_noise, &voice2_noise, &voice3_noise, &voice4_noise};
 AudioMixer4 *chord_voice_mixer_array[4] = {&voice1_mixer, &voice2_mixer, &voice3_mixer, &voice4_mixer};
 AudioFilterStateVariable *chord_voice_filter_array[4] = {&voice1_filter, &voice2_filter, &voice3_filter, &voice4_filter};
@@ -221,6 +222,7 @@ int8_t chord_shuffling_selection = 0;
 // retrigger release for chord delayed note
 
 int chord_retrigger_release=0;
+int glide_length=0;
 // strings filter parameters
 float string_filter_keytrack = 0;
 int string_filter_base_freq = 0;
@@ -494,17 +496,43 @@ void calculate_ws_array() {
 // setting the pad_frequency
 void set_chord_voice_frequency(uint8_t i, uint16_t current_note) {
   float note_freq = pow(2,chord_octave_change)*c_frequency/8 * pow(2, (current_note+transpose_semitones) / 12.0); //down one octave to let more possibilities with the shuffling array
-  AudioNoInterrupts();
-  chords_vibrato_lfo.frequency(chord_vibrato_base_freq + chord_vibrato_keytrack * current_chord_notes[0]);
-  chords_tremolo_lfo.frequency(chord_tremolo_base_freq + chord_tremolo_keytrack * current_chord_notes[0]);
-  // hord_vibrato_lfo_array[i]->frequency(chord_vibrato_base_freq);
-  // chord_tremolo_lfo_array[i]->frequency(chord_tremolo_base_freq);
-  chord_voice_filter_array[i]->frequency(note_freq * chord_filter_keytrack + chord_filter_base_freq);
-  chord_osc_1_array[i]->frequency(osc_1_freq_multiplier * note_freq);
-  chord_osc_2_array[i]->frequency(osc_2_freq_multiplier * note_freq);
-  chord_osc_3_array[i]->frequency(osc_3_freq_multiplier * note_freq);
-  // chord_voice_filter_array[i]->frequency(1*freq);
-  AudioInterrupts();
+  if(glide_length>0){
+        //ok so first we need to set the "middle note". Keep in mind that the signal will be +/-1 and will go +/- 1 octave
+    //let's do a trick to select a middle note: get the level (relative to the C) and the note and do a modulo 
+    int note_level=12*chord_octave_change-3*12+current_note+transpose_semitones;
+    int base_octave =chord_octave_change-2+(chord_shuffling_array[chord_shuffling_selection][i])/12;
+    int middle_note=base_octave*12+transpose_semitones; 
+    int note_delta=note_level-middle_note;
+    float middle_freq=c_frequency*pow(2,middle_note/12.0);
+
+    AudioNoInterrupts();
+    chords_vibrato_lfo.frequency(chord_vibrato_base_freq + chord_vibrato_keytrack * current_chord_notes[0]);
+    chords_tremolo_lfo.frequency(chord_tremolo_base_freq + chord_tremolo_keytrack * current_chord_notes[0]);
+    // hord_vibrato_lfo_array[i]->frequency(chord_vibrato_base_freq);
+    // chord_tremolo_lfo_array[i]->frequency(chord_tremolo_base_freq);
+    chord_voice_filter_array[i]->frequency(note_freq * chord_filter_keytrack + chord_filter_base_freq);
+    chord_osc_1_array[i]->frequency(osc_1_freq_multiplier * middle_freq);
+    chord_osc_2_array[i]->frequency(osc_2_freq_multiplier * middle_freq);
+    chord_osc_3_array[i]->frequency(osc_3_freq_multiplier * middle_freq);
+    chord_freq_dc_array[i]->amplitude(note_delta/24.0,glide_length);
+    // chord_voice_filter_array[i]->frequency(1*freq);
+    AudioInterrupts();
+  }else{
+    float note_freq = pow(2,chord_octave_change)*c_frequency/8 * pow(2, (current_note+transpose_semitones) / 12.0); //down one octave to let more possibilities with the shuffling array
+    AudioNoInterrupts();
+    chords_vibrato_lfo.frequency(chord_vibrato_base_freq + chord_vibrato_keytrack * current_chord_notes[0]);
+    chords_tremolo_lfo.frequency(chord_tremolo_base_freq + chord_tremolo_keytrack * current_chord_notes[0]);
+    // hord_vibrato_lfo_array[i]->frequency(chord_vibrato_base_freq);
+    // chord_tremolo_lfo_array[i]->frequency(chord_tremolo_base_freq);
+    chord_voice_filter_array[i]->frequency(note_freq * chord_filter_keytrack + chord_filter_base_freq);
+    chord_osc_1_array[i]->frequency(osc_1_freq_multiplier * note_freq);
+    chord_osc_2_array[i]->frequency(osc_2_freq_multiplier * note_freq);
+    chord_osc_3_array[i]->frequency(osc_3_freq_multiplier * note_freq);
+    chord_freq_dc_array[i]->amplitude(0,0);
+    // chord_voice_filter_array[i]->frequency(1*freq);
+    AudioInterrupts();
+  }
+
   if(chord_started_notes[i]!=0 && chord_started_notes[i]!=midi_base_note_transposed+current_note){
     //we need to change the note without triggering the change, ie a pitch bend
     usbMIDI.sendNoteOff(chord_started_notes[i],chord_release_velocity,1,chord_port);
@@ -792,8 +820,13 @@ void setup() {
     chord_voice_mixer_array[i]->gain(1, 1);
     chord_voice_mixer_array[i]->gain(2, 1);
     chord_noise_array[i]->amplitude(0.5);
-    chord_vibrato_mixer_array[i]->gain(0,0.5);
-    chord_vibrato_mixer_array[i]->gain(1,0.5);
+    //we hardcode the frequency modulation. Now intensity of the effect will be depending on the mixer gain 
+    chord_osc_1_array[i]->frequencyModulation(2);
+    chord_osc_2_array[i]->frequencyModulation(2);
+    chord_osc_3_array[i]->frequencyModulation(2);
+    //Now the max value of the vibrato is 0.25 for each component and we add 0.5 for pitch selection. With the multiplication by freqmodulation of 2, we maintain the rate we had before. 
+    chord_vibrato_mixer_array[i]->gain(1,0.5); 
+
     chord_vibrato_dc_envelope_array[i]->sustain(0); //for the pitch bend no need for sustain
     transient_full_mix.gain(i, 1);
     all_string_mix.gain(i, 1);

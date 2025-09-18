@@ -346,6 +346,9 @@ void apply_audio_parameter(int adress, int value) {
           chord_octave_change=value; current_chord_notes[i]=calculate_note_chord(i,slash_chord,sharp_active);
         }
         break;
+      case 199:
+        glide_length=value;
+        break;
       case 121:
         for (int i=0;i<4;i++){
           chord_osc_1_array[i]->amplitude(value/100.0);
@@ -582,7 +585,7 @@ void apply_audio_parameter(int adress, int value) {
         break;
       case 175:
         for (int i=0;i<4;i++){
-          chord_osc_1_array[i]->frequencyModulation(value/100.0);chord_osc_2_array[i]->frequencyModulation(value/100.0);chord_osc_3_array[i]->frequencyModulation(value/100.0);
+          chord_vibrato_mixer_array[i]->gain(0,value/100.0/4.0);chord_vibrato_mixer_array[i]->gain(1,value/100.0/4.0);
         }
         break;
       case 176:
