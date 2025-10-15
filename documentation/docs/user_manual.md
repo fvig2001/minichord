@@ -240,7 +240,7 @@ Presets are designed with an interface called [minicontrol](/minicontrol). In ad
 
 To do that, first open [minicontrol](/minicontrol) in a compatible web browser. We recommend using Google Chrome on desktop, because of its support of WebMidi sysex commands.
 
-Then connect your minichord to the computer with a USB micro cable. Please make sure that the cable used is not "charge-only" and supports data. 
+Then connect headphones or a 3.5mm jack to your minichord, and then your minichord to the computer with a USB micro cable. Please make sure that the cable used is not "charge-only" and supports data. 
 
 Reload the webpage. You should be shown a prompt asking you to "Control and reprogram youy Midi Devices". Allow it. This is necessary to send Midi sysex commands that are used to programm the minichord. 
 
