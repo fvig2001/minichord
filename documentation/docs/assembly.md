@@ -323,7 +323,7 @@ Without plugging the battery, plug in the micro USB. The power status led should
 
 ![first led test](./ressources/ok_led.jpg "first led test").
 
-If it does not light up, one the most likely reason is that you forgot to solder the VUSB header. Go back to the [Through-hole soldering](#through-hole_soldering) section and read carefully the part about the Teensy soldering. 
+If it does not light up, one the most likely reason is that you forgot to solder the VUSB header. Go back to the [Through-hole soldering](#Through-hole_soldering) section and read carefully the part about the Teensy soldering. 
 
 Then plug in the battery. **Make sure that the polarity is respected** (it should be the case if you followed previous instructions). This time the led will be red, indicating that the battery is charging. 
 

@@ -5,7 +5,7 @@
 ![[#1 sheet]](./ressources/drawing_1.png "#1 sheet")
 
 
-**To turn it on, simply plug the headphone jack in ①. The main led ② will shine.** If it does not turn on, then its battery is empty, charge it on any USB wallwart with a mini USB cable **③**. 
+**To turn it on, simply plug the headphone jack in ①. The main led ② will shine.** If it does not turn on, then its battery is empty, charge it on any USB wallwart with a micro USB cable **③**. 
 
 ![[#2 sheet]](./ressources/drawing_2.png "#2 sheet")
 
@@ -101,7 +101,7 @@ Simply push the rhythm mode button to switch from one mode to the other. That bu
 
 ## ⑥ Charging 
 
-Charging is done through the mini USB jack available on the bottom right of the minichord. Connection to any USB outlet will do, and it will draw 500ma of current. 
+Charging is done through the micro USB jack available on the bottom right of the minichord. Connection to any USB outlet will do, and it will draw 500ma of current. 
 
 **When charging, the top right led will shine red**. 
 
@@ -240,7 +240,7 @@ Presets are designed with an interface called [minicontrol](/minicontrol). In ad
 
 To do that, first open [minicontrol](/minicontrol) in a compatible web browser. We recommend using Google Chrome on desktop, because of its support of WebMidi sysex commands.
 
-Then connect your minichord to the computer with a USB mini cable. Please make sure that the cable used is not "charge-only" and supports data. 
+Then connect your minichord to the computer with a USB micro cable. Please make sure that the cable used is not "charge-only" and supports data. 
 
 Reload the webpage. You should be shown a prompt asking you to "Control and reprogram youy Midi Devices". Allow it. This is necessary to send Midi sysex commands that are used to programm the minichord. 
 
