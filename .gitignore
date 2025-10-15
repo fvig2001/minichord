@@ -45,7 +45,10 @@ hardware/PCB/miniChord_main_PCB/*
 !hardware/PCB/miniChord_main_PCB/MiniChord.pdf
 hardware/PCB/touch zones/keymaster PCB/*
 !hardware/PCB/touch zones/keymaster PCB/gerber
-#Useless things for the docc
+!hardware/PCB/touch zones/keymaster PCB/production_files
+hardware/PCB/touch zones/Shenzhen keymaster PCB/*
+
+#Useless things for the doc
 documentation/site/js
 documentation/site/search
 #Project management folder
