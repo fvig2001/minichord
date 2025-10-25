@@ -257,6 +257,29 @@ AudioEffectEnvelope *chord_envelope_filter_array[4] = {&voice1_envelope_filter, 
 AudioEffectMultiply *chord_tremolo_mult_array[4] = {&voice1_tremolo_mult, &voice2_tremolo_mult, &voice3_tremolo_mult, &voice4_tremolo_mult};
 AudioEffectEnvelope *chord_envelope_array[4] = {&voice1_envelope, &voice2_envelope, &voice3_envelope, &voice4_envelope};
 
+//clones
+AudioSynthWaveformModulated *string_waveform_array1[12] = {&waveform_string_18, &waveform_string_19, &waveform_string_20, &waveform_string_17, &waveform_string_21, &waveform_string_24, &waveform_string_22, &waveform_string_23, &waveform_string_13, &waveform_string_16, &waveform_string_14, &waveform_string_15};
+AudioEffectEnvelope *string_enveloppe_array1[12] = {&envelope_string_18, &envelope_string_19, &envelope_string_20, &envelope_string_17, &envelope_string_21, &envelope_string_24, &envelope_string_22, &envelope_string_23, &envelope_string_13, &envelope_string_16, &envelope_string_14, &envelope_string_15};
+AudioEffectEnvelope *string_enveloppe_filter_array1[12] = {&envelope_filter_18, &envelope_filter_19, &envelope_filter_20, &envelope_filter_17, &envelope_filter_21, &envelope_filter_24, &envelope_filter_22, &envelope_filter_23, &envelope_filter_13, &envelope_filter_16, &envelope_filter_14, &envelope_filter_15};
+AudioMixer4 *string_mixer_array1[3] = {&string_mix_5, &string_mix_6, &string_mix_4};
+AudioFilterStateVariable *string_filter_array1[12] = {&filter_string_18, &filter_string_19, &filter_string_20, &filter_string_17, &filter_string_21, &filter_string_24, &filter_string_22, &filter_string_23, &filter_string_13, &filter_string_16, &filter_string_14, &filter_string_15};
+AudioSynthWaveform *string_transient_waveform_array1[12] = {&waveform_transient_18, &waveform_transient_19, &waveform_transient_20, &waveform_transient_17, &waveform_transient_15, &waveform_transient_16, &waveform_transient_13, &waveform_transient_14, &waveform_transient_22, &waveform_transient_21, &waveform_transient_23, &waveform_transient_24};
+AudioEffectEnvelope *string_transient_envelope_array1[12] = {&envelope_transient_18, &envelope_transient_19, &envelope_transient_20, &envelope_transient_17, &envelope_transient_15, &envelope_transient_16, &envelope_transient_13, &envelope_transient_14, &envelope_transient_22, &envelope_transient_21, &envelope_transient_23, &envelope_transient_24};
+AudioMixer4 *transient_mixer_array1[3] = {&transient_mix_5, &transient_mix_4, &transient_mix_6};
+// for the chord
+AudioEffectEnvelope *chord_vibrato_envelope_array1[4] = {&voice1_vibrato_envelope1, &voice2_vibrato_envelope1, &voice3_vibrato_envelope1, &voice4_vibrato_envelope1};
+AudioEffectEnvelope *chord_vibrato_dc_envelope_array1[4] = {&voice1_vibrato_dc_envelope1, &voice2_vibrato_dc_envelope1, &voice3_vibrato_dc_envelope1, &voice4_vibrato_dc_envelope1};
+AudioMixer4 *chord_vibrato_mixer_array1[4] = {&voice1_vibrato_mixer1, &voice2_vibrato_mixer1, &voice3_vibrato_mixer1, &voice4_vibrato_mixer1};
+AudioSynthWaveformModulated *chord_osc_1_array1[4] = {&voice_osc12, &voice2_osc5, &voice3_osc5, &voice4_osc6};
+AudioSynthWaveformModulated *chord_osc_2_array1[4] = {&voice1_osc5, &voice_osc23, &voice3_osc4, &voice4_osc5};
+AudioSynthWaveformModulated *chord_osc_3_array1[4] = {&voice1_osc4, &voice2_osc4, &voice_osc34, &voice4_osc4};
+AudioSynthWaveformDc *chord_freq_dc_array1[4]= {&voice1_frequency_dc1, &voice2_frequency_dc1, &voice3_frequency_dc1, &voice4_frequency_dc1};
+AudioSynthNoiseWhite *chord_noise_array1[4] = {&voice1_noise1, &voice2_noise1, &voice3_noise1, &voice4_noise1};
+AudioMixer4 *chord_voice_mixer_array1[4] = {&voice1_mixer1, &voice2_mixer1, &voice3_mixer1, &voice4_mixer1};
+AudioFilterStateVariable *chord_voice_filter_array1[4] = {&voice1_filter1, &voice2_filter1, &voice3_filter1, &voice4_filter1};
+AudioEffectEnvelope *chord_envelope_filter_array1[4] = {&voice1_envelope_filter1, &voice2_envelope_filter1, &voice3_envelope_filter1, &voice4_envelope_filter1};
+AudioEffectMultiply *chord_tremolo_mult_array1[4] = {&voice1_tremolo_mult1, &voice2_tremolo_mult1, &voice3_tremolo_mult1, &voice4_tremolo_mult1};
+AudioEffectEnvelope *chord_envelope_array1[4] = {&voice1_envelope1, &voice2_envelope1, &voice3_envelope1, &voice4_envelope1};
 #include <Arduino.h>
 #include <malloc.h>
 
@@ -272,7 +295,6 @@ void printMemoryUsage() {
 
   // Heap information
   uint32_t heapUsed = mi.uordblks;
-  uint32_t heapFree = mi.fordblks;
 
   // Stack information
   char stackTop;
@@ -578,7 +600,229 @@ void processMIDI(void) {
       int note = usbMIDI.getData1();
       int velocity = usbMIDI.getData2();
       Serial.printf("Note On: ch=%d, note=%d, vel=%d\n", channel, note, velocity);
-        int c = externalUseFixedChannel ? EXTERNAL_CHANNEL : channel;
+        //int c = externalUseFixedChannel ? EXTERNAL_CHANNEL : channel;
+        note += 1;
+        
+        // Map the incoming note to a harp voice or chord voice
+        //int harp_index = (note - midi_base_note_transposed) % 12; // assuming 12 harp zones
+        int harp_index = note % 12; // assuming 12 harp zones
+        int oldAttack = harp_attack_velocity;
+        if (harp_index >= 0 && harp_index < 12) {
+          current_harp_notes[harp_index] = note;
+          set_harp_voice_frequency(harp_index, note);
+          
+          AudioNoInterrupts();
+          harp_attack_velocity = velocity;
+          envelope_string_vibrato_lfo1.noteOn();
+          envelope_string_vibrato_dc1.noteOn();
+          string_enveloppe_filter_array1[harp_index]->noteOn();
+          string_enveloppe_array1[harp_index]->noteOn();
+          string_transient_envelope_array1[harp_index]->noteOn();
+          AudioInterrupts();
+          harp_attack_velocity = oldAttack;
+        }
+    }
+    if(type==usbMIDI.NoteOff) 
+    {
+      int channel = usbMIDI.getChannel();
+      int note = usbMIDI.getData1();
+      int velocity = usbMIDI.getData2();
+      Serial.printf("Note Off: ch=%d, note=%d, vel=%d\n", channel, note, velocity);
+        //int c = externalUseFixedChannel ? EXTERNAL_CHANNEL : channel;
+        note += 1;
+        
+        // Map the incoming note to a harp voice or chord voice
+        //int harp_index = (note - midi_base_note_transposed) % 12; // assuming 12 harp zones
+        int harp_index = note % 12; // assuming 12 harp zones
+        
+        if (harp_index >= 0 && harp_index < 12) {
+          current_harp_notes[harp_index] = note;
+          set_harp_voice_frequency(harp_index, note);
+          
+          AudioNoInterrupts();
+          string_enveloppe_array1[harp_index]->noteOff();
+          string_transient_envelope_array1[harp_index]->noteOff();
+          string_enveloppe_filter_array1[harp_index]->noteOff();
+          AudioInterrupts();
+        }
+    }
+    if (type == usbMIDI.ControlChange && usbMIDI.getChannel() == 1)
+    {
+
+      int d2 = usbMIDI.getData2();
+      int channel = usbMIDI.getChannel();
+      chord_attack_velocity = chord_attack_velocity_PedalUsed;
+      harp_attack_velocity = harp_attack_velocity_PedalUsed; 
+      volumeOffset = d2;
+        if (volumeOffset > 127)
+        {
+          volumeOffset = 127;
+        }
+        if (volumeOffset < 0)
+        {
+          volumeOffset = 0;
+        }
+        
+        int clamped = chord_attack_velocity_PedalUsed + floor(volumeOffset/127.0);
+        
+        float vel_gain = clamped;
+        Serial.printf("Velocity Change: ch=%d, raw=%d value=%d gain = %f\n", channel, volumeOffset, clamped, vel_gain);
+
+        AudioNoInterrupts();
+        for (int i = 0; i < 12; i++)
+        {
+          string_waveform_array1[i]->amplitude(0.5 + vel_gain*0.25); //too loud
+        }
+
+        for (int i = 0; i < 4; i++)
+        {
+          chord_voice_mixer_array1[i]->gain(0, 0.7 + vel_gain*0.7);
+          chord_voice_mixer_array1[i]->gain(1, 0.7 + vel_gain*0.7);
+          chord_voice_mixer_array1[i]->gain(2, 0.7 + vel_gain*0.7);
+        }
+        Serial.printf("Velocity Change: ch=%d, raw=%d act value=%d\n", channel, volumeOffset, chord_attack_velocity);
+        AudioInterrupts();
+      
+      
+    }
+    if (type == usbMIDI.PitchBend  && (usbMIDI.getChannel() == 1 || usbMIDI.getChannel() == 2))
+    {
+        // ---------- PITCH BEND ----------
+        int d1 = usbMIDI.getData1();
+        int d2 = usbMIDI.getData2();
+        int channel = usbMIDI.getChannel();
+        // 14-bit raw value from LSB/MSB
+        int raw14 = (d2 << 7) | d1;        // 0 .. 16383
+        int signed14 = raw14 - 8192;      // -8192 .. 8191
+
+        int mapped = 0; // will hold -8191..8191 (or 0..8191 for channel 2)
+
+        if (channel == 2) {
+          if (signed14 <= 0) mapped = 0;
+          else mapped = constrain(signed14, 0, 8191);
+        } 
+        else if (channel == 3) {
+          // channel 3 = only downward bend: -8191 .. 0
+          if (signed14 <= 0) mapped = 0;
+          else mapped = constrain(signed14, 0, 8191) * -1;
+        } 
+        else {
+          // fallback: full signed range (if you ever want other channels to do full-range)
+          mapped = constrain(signed14, -8191, 8191);
+        }
+
+        // Convert mapped (-8191..8191 or 0..8191) into a semitone offset and then a freq multiplier
+        float bendSemis = ( (float)mapped / 8192.0f ) * bendRangeSemitones; // e.g. -2..0 or 0..+2
+        float bendRatio = powf(2.0f, bendSemis / 12.0f);
+
+        // --- apply to audio oscillators safely ---
+        // NOTE: these sizeof expressions work if these arrays are real static arrays visible here.
+        // If they are pointers, replace with your constants (e.g. NUM_CHORD_NOTES, NUM_CHORD_OSC).
+        const int numChordNotes = sizeof(current_chord_notes) / sizeof(current_chord_notes[0]);
+        const int numChordOsc   = sizeof(chord_osc_1_array)    / sizeof(chord_osc_1_array[0]);
+        const int applyVoices = min(numChordNotes, numChordOsc);
+        Serial.printf("Pitch Bend: ch=%d, raw=%d value=%d\n", channel,raw14, mapped);
+        AudioNoInterrupts();
+        for (int i = 0; i < applyVoices; i++) {
+          // only modify voices that are active / started
+          if (i < (int)(sizeof(chord_started_notes) / sizeof(chord_started_notes[0])) && chord_started_notes[i] != 0) {
+            // compute the same base frequency your set_chord_voice_frequency uses
+            float baseFreq = pow(2.0f, chord_octave_change) * c_frequency / 8.0f
+                            * pow(2.0f, (current_chord_notes[i] + transpose_semitones) / 12.0f);
+
+            chord_osc_1_array1[i]->frequency(osc_1_freq_multiplier * baseFreq * bendRatio);
+            chord_osc_2_array1[i]->frequency(osc_2_freq_multiplier * baseFreq * bendRatio);
+            chord_osc_3_array1[i]->frequency(osc_3_freq_multiplier * baseFreq * bendRatio);
+          }
+        }
+      
+        const int numHarpNotes = (int)(sizeof(current_harp_notes) / sizeof(current_harp_notes[0]));
+        const int numStringWave = (int)(sizeof(string_waveform_array) / sizeof(string_waveform_array[0]));
+        const int applyHarpVoices = min(numHarpNotes, numStringWave);
+
+        const int numHarpStarted = (int)(sizeof(harp_started_notes) / sizeof(harp_started_notes[0]));
+
+        for (int i = 0; i < applyHarpVoices; i++) {
+          if (i < numHarpStarted && harp_started_notes[i] != 0) {
+            // compute the same base frequencies as set_harp_voice_frequency, then apply bendRatio
+            float note_freq = pow(2.0f, harp_octave_change) * c_frequency / 4.0f
+                              * pow(2.0f, (current_harp_notes[i] + transpose_semitones) / 12.0f);
+            float transient_freq = 64.0f * c_frequency / 4.0f
+                                    * pow(2.0f, ((current_harp_notes[i] + transpose_semitones) % 12 + transient_note_level) / 12.0f);
+
+            // apply bend
+            string_waveform_array1[i]->frequency(note_freq * bendRatio);
+            string_transient_waveform_array1[i]->frequency(transient_freq * bendRatio);
+            // keep filter base freq but keytrack over the bent note freq
+            string_filter_array1[i]->frequency(string_filter_base_freq + (note_freq * bendRatio) * string_filter_keytrack);
+          }
+        }
+        
+        AudioInterrupts();
+      
+    }
+}
+
+void processMIDI_orig(void) {
+  byte type;
+  type = usbMIDI.getType();
+  if (type == usbMIDI.SystemExclusive && usbMIDI.getSysExArrayLength() == 6) 
+  {
+    sysex_controler_connected=true; //we can say for sure a controller is connected
+    const byte *data = usbMIDI.getSysExArray();
+    int adress = data[1] + 128 * data[2];
+    if (adress == 0) { // it is a control command
+      control_command(data[3], data[4]);
+    } else {
+      Serial.print("Received instruction on address:");
+      Serial.print(adress);
+      int value = data[3] + 128 * data[4];
+      Serial.print(" with value:");
+      Serial.println(value);
+      current_sysex_parameters[adress] = value;
+      apply_audio_parameter(adress, value);
+    }
+  }
+  if(type==usbMIDI.Start && rythm_mode)
+  {
+    rythm_current_step=0;
+    midi_clock_current_step=0;
+    rythm_tick_function();
+    Serial.println("Start received");
+    rythm_timer.end();
+  }
+  if(type==usbMIDI.Stop && rythm_mode)
+  {
+    rythm_timer.begin(rythm_tick_function, short_timer_period);
+  }
+
+
+  if(type==usbMIDI.Clock && rythm_mode)
+  {
+    //here we want half of the cycle to be synced with the midi clock, and half with the calculated internal clock, so we can still have shuffle
+    //recalculate the BPM
+    rythm_bpm=(rythm_bpm*10+(1000*1000*60/last_midi_clock_in)/24)/11.0;
+    last_midi_clock_in=0;
+    midi_clock_current_step+=1;
+    recalculate_timer();   
+    //once every two beat, we sync
+    if(midi_clock_current_step==24){
+      rythm_timer.begin(rythm_tick_function, short_timer_period);
+      rythm_tick_function();
+      midi_clock_current_step=0;
+    }
+    //We disable the timer to avoid having it trigger the tick too early when we arrive at the sync beat 
+    if(midi_clock_current_step>18){
+      rythm_timer.end();
+    }
+  }
+  if(type==usbMIDI.NoteOn)
+    {
+      int channel = usbMIDI.getChannel();
+      int note = usbMIDI.getData1();
+      int velocity = usbMIDI.getData2();
+      Serial.printf("Note On: ch=%d, note=%d, vel=%d\n", channel, note, velocity);
+        //int c = externalUseFixedChannel ? EXTERNAL_CHANNEL : channel;
         note += 1;
         
         // Map the incoming note to a harp voice or chord voice
@@ -606,7 +850,7 @@ void processMIDI(void) {
       int note = usbMIDI.getData1();
       int velocity = usbMIDI.getData2();
       Serial.printf("Note Off: ch=%d, note=%d, vel=%d\n", channel, note, velocity);
-        int c = externalUseFixedChannel ? EXTERNAL_CHANNEL : channel;
+        //int c = externalUseFixedChannel ? EXTERNAL_CHANNEL : channel;
         note += 1;
         
         // Map the incoming note to a harp voice or chord voice
@@ -746,6 +990,38 @@ void processMIDI(void) {
 void play_single_note(int i, IntervalTimer *timer) {
   timer->end();
   set_chord_voice_frequency(i, current_applied_chord_notes[i]);
+  chord_vibrato_envelope_array1[i]->noteOn();
+  chord_vibrato_dc_envelope_array1[i]->noteOn();
+  chord_envelope_array1[i]->noteOn();
+  chord_envelope_filter_array1[i]->noteOn();
+  if(chord_started_notes[i]!=0){
+    if (isLooperRecording)
+    {
+      midiEvent m;
+      m.timeStamp = curLooperTick;
+      m.status = MIDI_OFF;
+      m.data1 = chord_started_notes[i];
+      m.data2 = chord_release_velocity;      
+      addMidiLooperEvent(m, CHORD_CHANNEL);
+    }
+    usbMIDI.sendNoteOff(chord_started_notes[i],chord_release_velocity,CHORD_CHANNEL,chord_port);
+    chord_started_notes[i]=0;}
+    if (isLooperRecording)
+    {
+      midiEvent m;
+      m.timeStamp = curLooperTick;
+      m.status = MIDI_ON;
+      m.data1 = midi_base_note_transposed+ current_applied_chord_notes[i];
+      m.data2 = chord_attack_velocity+volumeOffset;      
+      addMidiLooperEvent(m, CHORD_CHANNEL);
+    }
+  usbMIDI.sendNoteOn(midi_base_note_transposed+ current_applied_chord_notes[i],chord_attack_velocity+volumeOffset,CHORD_CHANNEL,chord_port);
+  chord_started_notes[i]=midi_base_note_transposed+ current_applied_chord_notes[i];
+}
+
+void play_single_note_orig(int i, IntervalTimer *timer) {
+  timer->end();
+  set_chord_voice_frequency(i, current_applied_chord_notes[i]);
   chord_vibrato_envelope_array[i]->noteOn();
   chord_vibrato_dc_envelope_array[i]->noteOn();
   chord_envelope_array[i]->noteOn();
@@ -776,6 +1052,37 @@ void play_single_note(int i, IntervalTimer *timer) {
 }
 
 void play_note_selected_duration(int i,int current_note){
+  chord_vibrato_envelope_array1[i]->noteOn();
+  chord_vibrato_dc_envelope_array1[i]->noteOn();
+  chord_envelope_array1[i]->noteOn();
+  chord_envelope_filter_array1[i]->noteOn();
+  note_off_timing[i]=0;
+  if(chord_started_notes[i]!=0){
+    if (isLooperRecording)
+    {
+      midiEvent m;
+      m.timeStamp = curLooperTick;
+      m.status = MIDI_OFF;
+      m.data1 = chord_started_notes[i];
+      m.data2 = chord_release_velocity;      
+      addMidiLooperEvent(m, CHORD_CHANNEL);
+    }
+    usbMIDI.sendNoteOff(chord_started_notes[i],chord_release_velocity,CHORD_CHANNEL,chord_port);
+    chord_started_notes[i]=0;}
+    if (isLooperRecording)
+    {
+      midiEvent m;
+      m.timeStamp = curLooperTick;
+      m.status = MIDI_ON;
+      m.data1 = midi_base_note_transposed+current_note;
+      m.data2 = chord_attack_velocity+volumeOffset;      
+      addMidiLooperEvent(m, CHORD_CHANNEL);
+    }
+  usbMIDI.sendNoteOn(midi_base_note_transposed+current_note,chord_attack_velocity+volumeOffset,CHORD_CHANNEL,chord_port);
+  chord_started_notes[i]=midi_base_note_transposed+current_note;
+}
+
+void play_note_selected_duration_orig(int i,int current_note){
   chord_vibrato_envelope_array[i]->noteOn();
   chord_vibrato_dc_envelope_array[i]->noteOn();
   chord_envelope_array[i]->noteOn();
@@ -823,7 +1130,75 @@ void calculate_ws_array() {
   }
 }
 // setting the pad_frequency
+
+// setting the pad_frequency
 void set_chord_voice_frequency(uint8_t i, uint16_t current_note) {
+  float note_freq = pow(2,chord_octave_change)*c_frequency/8 * pow(2, (current_note+transpose_semitones) / 12.0); //down one octave to let more possibilities with the shuffling array
+  if(glide_length>0){
+        //ok so first we need to set the "middle note". Keep in mind that the signal will be +/-1 and will go +/- 1 octave
+    //let's do a trick to select a middle note: get the level (relative to the C) and the note and do a modulo 
+    int note_level=12*chord_octave_change-3*12+current_note+transpose_semitones;
+    int base_octave =chord_octave_change-2+(chord_shuffling_array[chord_shuffling_selection][i])/12;
+    int middle_note=base_octave*12+transpose_semitones; 
+    int note_delta=note_level-middle_note;
+    float middle_freq=c_frequency*pow(2,middle_note/12.0);
+
+    AudioNoInterrupts();
+    chords_vibrato_lfo1.frequency(chord_vibrato_base_freq + chord_vibrato_keytrack * current_chord_notes[0]);
+    chords_tremolo_lfo1.frequency(chord_tremolo_base_freq + chord_tremolo_keytrack * current_chord_notes[0]);
+    // hord_vibrato_lfo_array[i]->frequency(chord_vibrato_base_freq);
+    // chord_tremolo_lfo_array[i]->frequency(chord_tremolo_base_freq);
+    chord_voice_filter_array1[i]->frequency(note_freq * chord_filter_keytrack + chord_filter_base_freq);
+    chord_osc_1_array1[i]->frequency(osc_1_freq_multiplier * middle_freq);
+    chord_osc_2_array1[i]->frequency(osc_2_freq_multiplier * middle_freq);
+    chord_osc_3_array1[i]->frequency(osc_3_freq_multiplier * middle_freq);
+    chord_freq_dc_array1[i]->amplitude(note_delta/24.0,glide_length);
+    // chord_voice_filter_array[i]->frequency(1*freq);
+    AudioInterrupts();
+  }else{
+    float note_freq = pow(2,chord_octave_change)*c_frequency/8 * pow(2, (current_note+transpose_semitones) / 12.0); //down one octave to let more possibilities with the shuffling array
+    AudioNoInterrupts();
+    chords_vibrato_lfo1.frequency(chord_vibrato_base_freq + chord_vibrato_keytrack * current_chord_notes[0]);
+    chords_tremolo_lfo1.frequency(chord_tremolo_base_freq + chord_tremolo_keytrack * current_chord_notes[0]);
+    // hord_vibrato_lfo_array[i]->frequency(chord_vibrato_base_freq);
+    // chord_tremolo_lfo_array[i]->frequency(chord_tremolo_base_freq);
+    chord_voice_filter_array1[i]->frequency(note_freq * chord_filter_keytrack + chord_filter_base_freq);
+    chord_osc_1_array1[i]->frequency(osc_1_freq_multiplier * note_freq);
+    chord_osc_2_array1[i]->frequency(osc_2_freq_multiplier * note_freq);
+    chord_osc_3_array1[i]->frequency(osc_3_freq_multiplier * note_freq);
+    chord_freq_dc_array1[i]->amplitude(0,0);
+    // chord_voice_filter_array[i]->frequency(1*freq);
+    AudioInterrupts();
+  }
+
+  if(chord_started_notes[i]!=0 && chord_started_notes[i]!=midi_base_note_transposed+current_note){
+    //we need to change the note without triggering the change, ie a pitch bend
+    if (isLooperRecording)
+    {
+      midiEvent m;
+      m.timeStamp = curLooperTick;
+      m.status = MIDI_OFF;
+      m.data1 = chord_started_notes[i];
+      m.data2 = chord_release_velocity;      
+      addMidiLooperEvent(m, CHORD_CHANNEL);
+    }
+    usbMIDI.sendNoteOff(chord_started_notes[i],chord_release_velocity,CHORD_CHANNEL,chord_port);
+    chord_started_notes[i]=0;
+    if (isLooperRecording)
+    {
+      midiEvent m;
+      m.timeStamp = curLooperTick;
+      m.status = MIDI_OFF;
+      m.data1 = midi_base_note_transposed+current_note;
+      m.data2 = chord_attack_velocity+volumeOffset;      
+      addMidiLooperEvent(m, CHORD_CHANNEL);
+    }
+    usbMIDI.sendNoteOn(midi_base_note_transposed+current_note,chord_attack_velocity+volumeOffset,CHORD_CHANNEL,chord_port);
+    chord_started_notes[i]=midi_base_note_transposed+ current_note;
+  }
+}
+
+void set_chord_voice_frequency_orig(uint8_t i, uint16_t current_note) {
   float note_freq = pow(2,chord_octave_change)*c_frequency/8 * pow(2, (current_note+transpose_semitones) / 12.0); //down one octave to let more possibilities with the shuffling array
   if(glide_length>0){
         //ok so first we need to set the "middle note". Keep in mind that the signal will be +/-1 and will go +/- 1 octave
@@ -888,8 +1263,20 @@ void set_chord_voice_frequency(uint8_t i, uint16_t current_note) {
     chord_started_notes[i]=midi_base_note_transposed+ current_note;
   }
 }
-// setting the harp
+
 void set_harp_voice_frequency(uint8_t i, uint16_t current_note) {
+  float note_freq =  pow(2,harp_octave_change)*c_frequency/4 * pow(2, (current_note+transpose_semitones) / 12.0);
+  float transient_freq =  64.0*c_frequency/4 *pow(2, ((current_note+transpose_semitones)%12+transient_note_level) / 12.0);
+  AudioNoInterrupts();
+  string_waveform_array1[i]->frequency(note_freq);
+  string_transient_waveform_array1[i]->frequency(transient_freq);
+  string_filter_array1[i]->frequency(string_filter_base_freq + note_freq * string_filter_keytrack);
+  // string_vibrato_1.offset(0);
+  AudioInterrupts();
+}
+
+// setting the harp
+void set_harp_voice_frequency_orig(uint8_t i, uint16_t current_note) {
   float note_freq =  pow(2,harp_octave_change)*c_frequency/4 * pow(2, (current_note+transpose_semitones) / 12.0);
   float transient_freq =  64.0*c_frequency/4 *pow(2, ((current_note+transpose_semitones)%12+transient_note_level) / 12.0);
   AudioNoInterrupts();
@@ -1155,14 +1542,23 @@ void setup() {
   calculate_ws_array();
   chord_waveshape.shape(wave_shape, 257);
   string_waveshape.shape(wave_shape, 257);
+  //clones
+  chord_waveshape1.shape(wave_shape, 257);
+  string_waveshape1.shape(wave_shape, 257);
   //the base DC value for strings
   filter_dc.amplitude(1);
+  filter_dc1.amplitude(1);
   // the delay passthrough
   string_delay_mix.gain(0, 1);
   chord_delay_mix.gain(0, 1);
+
+  string_delay_mix1.gain(0, 1);
+  chord_delay_mix1.gain(0, 1);
   // simple mixers
   string_vibrato_mixer.gain(0,0.5);
   string_vibrato_mixer.gain(1,0.5);
+  string_vibrato_mixer1.gain(0,0.5);
+  string_vibrato_mixer1.gain(1,0.5);
   envelope_string_vibrato_dc.sustain(0);
   for (int i = 0; i < 3; i++) {
     string_mixer_array[i]->gain(0, 1);
@@ -1173,6 +1569,15 @@ void setup() {
     transient_mixer_array[i]->gain(1, 1);
     transient_mixer_array[i]->gain(2, 1);
     transient_mixer_array[i]->gain(3, 1);
+    //clones
+    string_mixer_array1[i]->gain(0, 1);
+    string_mixer_array1[i]->gain(1, 1);
+    string_mixer_array1[i]->gain(2, 1);
+    string_mixer_array1[i]->gain(3, 1);
+    transient_mixer_array1[i]->gain(0, 1);
+    transient_mixer_array1[i]->gain(1, 1);
+    transient_mixer_array1[i]->gain(2, 1);
+    transient_mixer_array1[i]->gain(3, 1);
   }
   for (int i = 0; i < 4; i++) {
     chord_voice_mixer_array[i]->gain(0, 1);
@@ -1189,11 +1594,27 @@ void setup() {
     chord_vibrato_dc_envelope_array[i]->sustain(0); //for the pitch bend no need for sustain
     transient_full_mix.gain(i, 1);
     all_string_mix.gain(i, 1);
+//clones
+    chord_voice_mixer_array1[i]->gain(0, 1);
+    chord_voice_mixer_array1[i]->gain(1, 1);
+    chord_voice_mixer_array1[i]->gain(2, 1);
+    chord_noise_array1[i]->amplitude(0.5);
+    //we hardcode the frequency modulation. Now intensity of the effect will be depending on the mixer gain 
+    chord_osc_1_array1[i]->frequencyModulation(2);
+    chord_osc_2_array1[i]->frequencyModulation(2);
+    chord_osc_3_array1[i]->frequencyModulation(2);
+    //Now the max value of the vibrato is 0.25 for each component and we add 0.5 for pitch selection. With the multiplication by freqmodulation of 2, we maintain the rate we had before. 
+    chord_vibrato_mixer_array1[i]->gain(1,0.5); 
+    chord_vibrato_dc_envelope_array1[i]->sustain(0); //for the pitch bend no need for sustain
+    transient_full_mix1.gain(i, 1);
+    all_string_mix1.gain(i, 1);
   }
   for(int i=0;i<12;i++){
     string_transient_envelope_array[i]->sustain(0);//don't need sustain for the transient
+    string_transient_envelope_array1[i]->sustain(0);//don't need sustain for the transient
   }
   all_string_mix.gain(3,0.02); //for the transient
+  all_string_mix1.gain(3,0.02); //for the transient
 
   // initialising the rest of the hardware
   chord_matrix.setup();
@@ -1234,7 +1655,8 @@ void setup() {
   digitalWrite(_MUTE_PIN, HIGH);
   
 }
-
+AudioSynthWaveform testTone;
+AudioConnection* testPatch = nullptr;
 
 void handle_chords_button() {
   int sharp_transition = chord_matrix_array[0].read_transition();
@@ -1243,10 +1665,21 @@ void handle_chords_button() {
   }
   bool oldSharp_active = sharp_active;
   sharp_active = chord_matrix_array[0].read_value();
+  
   if (sharp_active && !oldSharp_active)
   {
     Serial.printf("Sharp pressed\n");
     listenShift = true;
+    if (!testPatch) {
+      testPatch = new AudioConnection(testTone, 0, string_filter_mixer, 0);
+    }
+    testTone.begin(WAVEFORM_SINE);
+    testTone.frequency(440);
+    testTone.amplitude(0.5);
+
+    // Temporarily wire into mixer input to test:
+
+    
   }
   else if (!sharp_active && listenShift)
   {
@@ -1270,6 +1703,65 @@ void handle_chords_button() {
 }
 
 void handle_harp() {
+  harp_sensor.update(harp_array);
+  for (int i = 0; i < 12; i++) {
+    int value = harp_array[i].read_transition();
+    if (value == 2) {
+      set_harp_voice_frequency(i, current_harp_notes[i]);
+      AudioNoInterrupts();
+      envelope_string_vibrato_lfo1.noteOn();
+      envelope_string_vibrato_dc1.noteOn();
+      string_enveloppe_filter_array1[i]->noteOn();
+      string_enveloppe_array1[i]->noteOn();
+      string_transient_envelope_array1[i]->noteOn();
+      AudioInterrupts();
+      if (harp_started_notes[i] != 0) {
+        usbMIDI.sendNoteOff(harp_started_notes[i], harp_release_velocity, HARP_CHANNEL, harp_port);
+        if (isLooperRecording)
+        {
+          midiEvent m;
+          m.timeStamp = curLooperTick;
+          m.status = MIDI_OFF;
+          m.data1 = harp_started_notes[i];
+          m.data2 = harp_release_velocity;      
+          addMidiLooperEvent(m, HARP_CHANNEL);
+        }
+      }
+      if (isLooperRecording)
+      {
+        midiEvent m;
+        m.timeStamp = curLooperTick;
+        m.status = MIDI_ON;
+        m.data1 = midi_base_note_transposed + current_harp_notes[i];
+        m.data2 = harp_attack_velocity+volumeOffset;      
+        addMidiLooperEvent(m, HARP_CHANNEL);
+      }
+      usbMIDI.sendNoteOn(midi_base_note_transposed + current_harp_notes[i], harp_attack_velocity+volumeOffset, HARP_CHANNEL, harp_port);
+      harp_started_notes[i] = midi_base_note_transposed + current_harp_notes[i];
+    } else if (value == 1) {
+      AudioNoInterrupts();
+      string_enveloppe_array1[i]->noteOff();
+      string_transient_envelope_array1[i]->noteOff();
+      string_enveloppe_filter_array1[i]->noteOff();
+      AudioInterrupts();
+      if (harp_started_notes[i] != 0) {
+        if (isLooperRecording)
+          {
+            midiEvent m;
+            m.timeStamp = curLooperTick;
+            m.status = MIDI_OFF;
+            m.data1 = harp_started_notes[i];
+            m.data2 = harp_release_velocity;      
+            addMidiLooperEvent(m, HARP_CHANNEL);
+          }
+        usbMIDI.sendNoteOff(harp_started_notes[i], harp_release_velocity, HARP_CHANNEL, harp_port);
+        harp_started_notes[i] = 0;
+      }
+    }
+  }
+}
+
+void handle_harp_orig() {
   harp_sensor.update(harp_array);
   for (int i = 0; i < 12; i++) {
     int value = harp_array[i].read_transition();
@@ -1418,6 +1910,32 @@ void update_harp_notes() {
 void stop_chord_notes() {
   AudioNoInterrupts();
   for (int i = 0; i < 4; i++) {
+    if (chord_envelope_array1[i]->isSustain()) {
+      chord_vibrato_envelope_array1[i]->noteOff();
+      chord_vibrato_dc_envelope_array1[i]->noteOff();
+      chord_envelope_array1[i]->noteOff();
+      chord_envelope_filter_array1[i]->noteOff();
+      if (chord_started_notes[i] != 0) {
+        if (isLooperRecording)
+        {
+          midiEvent m;
+          m.timeStamp = curLooperTick;
+          m.status = MIDI_OFF;
+          m.data1 = chord_started_notes[i];
+          m.data2 = chord_release_velocity;      
+          addMidiLooperEvent(m, CHORD_CHANNEL);
+        }       
+        usbMIDI.sendNoteOff(chord_started_notes[i], chord_release_velocity, CHORD_CHANNEL, chord_port);
+        chord_started_notes[i] = 0;
+      }
+    }
+  }
+  AudioInterrupts();
+}
+
+void stop_chord_notes_orig() {
+  AudioNoInterrupts();
+  for (int i = 0; i < 4; i++) {
     if (chord_envelope_array[i]->isSustain()) {
       chord_vibrato_envelope_array[i]->noteOff();
       chord_vibrato_dc_envelope_array[i]->noteOff();
@@ -1442,6 +1960,30 @@ void stop_chord_notes() {
 }
 
 void handle_rhythm_mode() {
+  for (int i = 0; i < 4; i++) {
+    if (note_off_timing[i] > note_pushed_duration && chord_envelope_array1[i]->isSustain()) {
+      chord_vibrato_envelope_array1[i]->noteOff();
+      chord_vibrato_dc_envelope_array1[i]->noteOff();
+      chord_envelope_array1[i]->noteOff();
+      chord_envelope_filter_array1[i]->noteOff();
+      if (chord_started_notes[i] != 0) {
+        if (isLooperRecording)
+        {
+          midiEvent m;
+          m.timeStamp = curLooperTick;
+          m.status = MIDI_OFF;
+          m.data1 = chord_started_notes[i];
+          m.data2 = chord_release_velocity;      
+          addMidiLooperEvent(m, CHORD_CHANNEL);
+        }               
+        usbMIDI.sendNoteOff(chord_started_notes[i], chord_release_velocity, CHORD_CHANNEL, chord_port);
+        chord_started_notes[i] = 0;
+      }
+    }
+  }
+}
+
+void handle_rhythm_mode_orig() {
   for (int i = 0; i < 4; i++) {
     if (note_off_timing[i] > note_pushed_duration && chord_envelope_array[i]->isSustain()) {
       chord_vibrato_envelope_array[i]->noteOff();
@@ -1647,11 +2189,11 @@ void transferRecording()
   }
   looperBuffer.reserve(looperBuffer.size() + looperRecordBuffer.size());
   Serial.printf("Transferring %d data to total %d offset = %d\n", looperRecordBuffer.size(), looperBuffer.size()+looperRecordBuffer.size(), offset);
-  uint32_t old;
+  //uint32_t old;
   //todo delete after transferring
   for (int i = 0; i < (int)looperRecordBuffer.size(); i++)
   {
-      old = looperRecordBuffer[i].timeStamp;
+      //old = looperRecordBuffer[i].timeStamp;
 
       // Adjust timestamp before transferring
       looperRecordBuffer[i].timeStamp = (uint32_t)(looperRecordBuffer[i].timeStamp + offset);
@@ -2082,9 +2624,9 @@ void HandleUSBHost()
 
       for (int i = 0; i < 4; i++)
       {
-        chord_voice_mixer_array[i]->gain(0, 0.7 + vel_gain*0.7);
-        chord_voice_mixer_array[i]->gain(1, 0.7 + vel_gain*0.7);
-        chord_voice_mixer_array[i]->gain(2, 0.7 + vel_gain*0.7);
+        chord_voice_mixer_array1[i]->gain(0, 0.7 + vel_gain*0.7);
+        chord_voice_mixer_array1[i]->gain(1, 0.7 + vel_gain*0.7);
+        chord_voice_mixer_array1[i]->gain(2, 0.7 + vel_gain*0.7);
       }
        Serial.printf("Velocity Change: ch=%d, raw=%d act value=%d\n", channel, volumeOffset, chord_attack_velocity);
        AudioInterrupts();
@@ -2100,7 +2642,7 @@ void HandleUSBHost()
 template<typename SerialType>
 bool decodeCmd(SerialType& serialPort, String cmd, std::vector<String>* params) {
   char buffer[64];
-  bool bTemp = false;
+  //bool bTemp = false;
   if (debug) {
     Serial.printf("Serial command received is %s\n", cmd.c_str());
   }
@@ -2259,10 +2801,39 @@ void advanceLooper() {
       if ((m.status & 0xf0) == MIDI_ON) 
       {
         usbMIDI.sendNoteOn(m.data1, m.data2, channel);
+        int harp_index = m.data1 % 12; // assuming 12 harp zones
+        int oldAttack = harp_attack_velocity;
+        if (harp_index >= 0 && harp_index < 12) {
+          current_harp_notes[harp_index] = m.data1 - 24;
+          set_harp_voice_frequency(harp_index, m.data1- 24);
+          
+          AudioNoInterrupts();
+          harp_attack_velocity = m.data2;
+          envelope_string_vibrato_lfo.noteOn();
+          envelope_string_vibrato_dc.noteOn();
+          string_enveloppe_filter_array[harp_index]->noteOn();
+          string_enveloppe_array[harp_index]->noteOn();
+          string_transient_envelope_array[harp_index]->noteOn();
+          AudioInterrupts();
+          harp_attack_velocity = oldAttack;
+        }
+
       }
       else if ((m.status & 0xf0) == MIDI_OFF) 
       {
         usbMIDI.sendNoteOff(m.data1, m.data2, channel);
+        int harp_index = m.data1 % 12; // assuming 12 harp zones
+        
+        if (harp_index >= 0 && harp_index < 12) {
+          current_harp_notes[harp_index] = m.data1- 24;
+          set_harp_voice_frequency(harp_index, m.data1- 24);
+          
+          AudioNoInterrupts();
+          string_enveloppe_array[harp_index]->noteOff();
+          string_transient_envelope_array[harp_index]->noteOff();
+          string_enveloppe_filter_array[harp_index]->noteOff();
+          AudioInterrupts();
+        }
       }
       
       else if ((m.status & 0xf0) == MIDI_PITCH_UP || (m.status & 0xf0) == MIDI_PITCH_DOWN) 
