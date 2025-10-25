@@ -1,3 +1,4 @@
+
 #include "audio_definition.h"
 #include "def.h"
 #include <AT42QT2120.h>
@@ -10,14 +11,67 @@
 #include <debouncer.h>
 #include <harp.h>
 #include <potentiometer.h>
-
+#include <vector>
 #include <USBHost_t36.h>  // Teensy USB Host library
 #include <MIDI.h>
+bool debug = true;
+
+
+typedef struct _MidiEvent {
+  uint32_t timeStamp;
+  uint8_t status;
+  uint8_t data1;
+  uint8_t data2;
+  bool record = true;
+} midiEvent;
+std::vector<midiEvent> LooperSignalNotes; 
+bool isLooperToBeRecording = false;
+bool isLooperToBeStarting = false;
+bool isLooperActive = false; //looper is playing
+bool isLooperRecording = false; //looper is recording
+uint32_t curLooperTick = 0; //current time in terms of tick
+uint32_t curLooperCnt = 0;
+
+std::vector<midiEvent> looperBuffer;
+std::vector<midiEvent> looperRecordBuffer;
+
+void addMidiLooperEvent(midiEvent m, uint8_t channel, bool isSignal = false)
+{
+  switch (channel)
+  {
+    case HARP_CHANNEL:
+      channel = HARP_LOOPER_CHANNEL;
+      break;
+    case CHORD_CHANNEL:
+      channel = CHORD_LOOPER_CHANNEL;
+      break;
+    case EXTERNAL_CHANNEL:
+      channel = EXTERNAL_LOOPER_CHANNEL;
+      break;
+    default:
+      channel = EXTERNAL_CHORD_LOOPER_CHANNEL;
+      break;
+  }
+  m.status = m.status | channel;
+  
+  if (!isSignal)
+  {
+    if (looperBuffer.size() + looperRecordBuffer.size() > MAX_LOOPER_EVENTS)
+    {
+      return; //do nothing
+    }
+    looperRecordBuffer.push_back(m);
+  }
+  else
+  {
+    LooperSignalNotes.push_back(m);
+  }
+  
+}
+
 bool pedalUsed = false;
-#define HARP_CHANNEL 1
-#define CHORD_CHANNEL 1
 bool externalUseFixedChannel = true;
-const int EXTERNAL_CHANNEL = 3;
+
 int volumeOffset = 0;
 void handleExtUSBNoteOn(byte channel, byte note, byte velocity);
 void handleExtUSBNoteOff(byte channel, byte note, byte velocity);
@@ -190,6 +244,47 @@ AudioEffectEnvelope *chord_envelope_filter_array[4] = {&voice1_envelope_filter, 
 AudioEffectMultiply *chord_tremolo_mult_array[4] = {&voice1_tremolo_mult, &voice2_tremolo_mult, &voice3_tremolo_mult, &voice4_tremolo_mult};
 AudioEffectEnvelope *chord_envelope_array[4] = {&voice1_envelope, &voice2_envelope, &voice3_envelope, &voice4_envelope};
 
+#include <Arduino.h>
+#include <malloc.h>
+
+extern "C" char _stext;  // Start of program code
+extern "C" char _etext;  // End of program code
+extern "C" char _sbss;   // Start of BSS (zero-initialized vars)
+extern "C" char _ebss;   // End of BSS
+extern "C" char _sdata;  // Start of data section
+extern "C" char _edata;  // End of data section
+
+void printMemoryUsage() {
+  struct mallinfo mi = mallinfo();
+
+  // Heap information
+  uint32_t heapUsed = mi.uordblks;
+  uint32_t heapFree = mi.fordblks;
+
+  // Stack information
+  char stackTop;
+  uint32_t stackUsed = (uint32_t)&stackTop - (uint32_t)&_ebss;
+
+  // Teensy 4.0 has 512 KB tightly coupled RAM (DTCM + ITCM)
+  constexpr uint32_t totalRAM = 512 * 1024;
+
+  uint32_t totalUsed = heapUsed + stackUsed;
+  uint32_t totalFree = totalRAM - totalUsed;
+
+  Serial.println("\n===== MEMORY USAGE (Teensy 4.x) =====");
+  Serial.printf("Code (.text):  %lu bytes\n", (uint32_t)(&_etext - &_stext));
+  Serial.printf("Data (.data):  %lu bytes\n", (uint32_t)(&_edata - &_sdata));
+  Serial.printf("BSS (.bss):    %lu bytes\n", (uint32_t)(&_ebss - &_sbss));
+  Serial.printf("Heap Used:     %lu bytes\n", heapUsed);
+  Serial.printf("Stack Used:    %lu bytes\n", stackUsed);
+  Serial.printf("--------------------------------------\n");
+  Serial.printf("Total Used:    %lu bytes\n", totalUsed);
+  Serial.printf("Free RAM:      %lu bytes\n", totalFree);
+  Serial.printf("======================================\n\n");
+}
+
+
+bool memShown = false;
 //>>SYNTHESIS VARIABLE<<
 // waveshaper shape
 float wave_shape[257] = {};
@@ -581,8 +676,6 @@ void processMIDI(void) {
           mapped = constrain(signed14, -8191, 8191);
         }
 
-        
-
         // Convert mapped (-8191..8191 or 0..8191) into a semitone offset and then a freq multiplier
         float bendSemis = ( (float)mapped / 8192.0f ) * bendRangeSemitones; // e.g. -2..0 or 0..+2
         float bendRatio = powf(2.0f, bendSemis / 12.0f);
@@ -645,9 +738,27 @@ void play_single_note(int i, IntervalTimer *timer) {
   chord_envelope_array[i]->noteOn();
   chord_envelope_filter_array[i]->noteOn();
   if(chord_started_notes[i]!=0){
-    usbMIDI.sendNoteOff(chord_started_notes[i],chord_release_velocity,1,chord_port);
+    if (isLooperRecording)
+    {
+      midiEvent m;
+      m.timeStamp = curLooperTick;
+      m.status = MIDI_OFF;
+      m.data1 = chord_started_notes[i];
+      m.data2 = chord_release_velocity;      
+      addMidiLooperEvent(m, CHORD_CHANNEL);
+    }
+    usbMIDI.sendNoteOff(chord_started_notes[i],chord_release_velocity,CHORD_CHANNEL,chord_port);
     chord_started_notes[i]=0;}
-  usbMIDI.sendNoteOn(midi_base_note_transposed+ current_applied_chord_notes[i],chord_attack_velocity+volumeOffset,1,chord_port);
+    if (isLooperRecording)
+    {
+      midiEvent m;
+      m.timeStamp = curLooperTick;
+      m.status = MIDI_ON;
+      m.data1 = midi_base_note_transposed+ current_applied_chord_notes[i];
+      m.data2 = chord_attack_velocity+volumeOffset;      
+      addMidiLooperEvent(m, CHORD_CHANNEL);
+    }
+  usbMIDI.sendNoteOn(midi_base_note_transposed+ current_applied_chord_notes[i],chord_attack_velocity+volumeOffset,CHORD_CHANNEL,chord_port);
   chord_started_notes[i]=midi_base_note_transposed+ current_applied_chord_notes[i];
 }
 
@@ -658,9 +769,27 @@ void play_note_selected_duration(int i,int current_note){
   chord_envelope_filter_array[i]->noteOn();
   note_off_timing[i]=0;
   if(chord_started_notes[i]!=0){
-    usbMIDI.sendNoteOff(chord_started_notes[i],chord_release_velocity,1,chord_port);
+    if (isLooperRecording)
+    {
+      midiEvent m;
+      m.timeStamp = curLooperTick;
+      m.status = MIDI_OFF;
+      m.data1 = chord_started_notes[i];
+      m.data2 = chord_release_velocity;      
+      addMidiLooperEvent(m, CHORD_CHANNEL);
+    }
+    usbMIDI.sendNoteOff(chord_started_notes[i],chord_release_velocity,CHORD_CHANNEL,chord_port);
     chord_started_notes[i]=0;}
-  usbMIDI.sendNoteOn(midi_base_note_transposed+current_note,chord_attack_velocity+volumeOffset,1,chord_port);
+    if (isLooperRecording)
+    {
+      midiEvent m;
+      m.timeStamp = curLooperTick;
+      m.status = MIDI_ON;
+      m.data1 = midi_base_note_transposed+current_note;
+      m.data2 = chord_attack_velocity+volumeOffset;      
+      addMidiLooperEvent(m, CHORD_CHANNEL);
+    }
+  usbMIDI.sendNoteOn(midi_base_note_transposed+current_note,chord_attack_velocity+volumeOffset,CHORD_CHANNEL,chord_port);
   chord_started_notes[i]=midi_base_note_transposed+current_note;
 }
 
@@ -722,9 +851,27 @@ void set_chord_voice_frequency(uint8_t i, uint16_t current_note) {
 
   if(chord_started_notes[i]!=0 && chord_started_notes[i]!=midi_base_note_transposed+current_note){
     //we need to change the note without triggering the change, ie a pitch bend
-    usbMIDI.sendNoteOff(chord_started_notes[i],chord_release_velocity,1,chord_port);
+    if (isLooperRecording)
+    {
+      midiEvent m;
+      m.timeStamp = curLooperTick;
+      m.status = MIDI_OFF;
+      m.data1 = chord_started_notes[i];
+      m.data2 = chord_release_velocity;      
+      addMidiLooperEvent(m, CHORD_CHANNEL);
+    }
+    usbMIDI.sendNoteOff(chord_started_notes[i],chord_release_velocity,CHORD_CHANNEL,chord_port);
     chord_started_notes[i]=0;
-    usbMIDI.sendNoteOn(midi_base_note_transposed+current_note,chord_attack_velocity+volumeOffset,1,chord_port);
+    if (isLooperRecording)
+    {
+      midiEvent m;
+      m.timeStamp = curLooperTick;
+      m.status = MIDI_OFF;
+      m.data1 = midi_base_note_transposed+current_note;
+      m.data2 = chord_attack_velocity+volumeOffset;      
+      addMidiLooperEvent(m, CHORD_CHANNEL);
+    }
+    usbMIDI.sendNoteOn(midi_base_note_transposed+current_note,chord_attack_velocity+volumeOffset,CHORD_CHANNEL,chord_port);
     chord_started_notes[i]=midi_base_note_transposed+ current_note;
   }
 }
@@ -973,7 +1120,19 @@ void load_config(int bank_number) {
   flag_save_needed=false;
   //digitalWrite(_MUTE_PIN, HIGH); // unmuting the DAC
 }
+unsigned int computeTickInterval(int bpm) {
+  // 60,000,000 microseconds per minute / (BPM * 192 ticks per quarter note)
+  return ((60000 / bpm) / (QUARTERNOTETICKS * 1.0)) * 1000;
+}
+bool sendClockTick = false;
+void clockISR() {
+  sendClockTick = true;
+}
 
+void tickISR() {
+  sendClockTick = true;
+}
+IntervalTimer tickTimer;
 void setup() {
   Serial.begin(9600);
   Serial.println("Initialising audio parameters");
@@ -1057,9 +1216,10 @@ void setup() {
   myusb.begin();
   midi1.setHandleNoteOn(handleExtUSBNoteOn);
   midi1.setHandleNoteOff(handleExtUSBNoteOff);
-
+  tickTimer.begin(clockISR, computeTickInterval(127));  // in microseconds
   Serial.println("Initialisation complete");
   digitalWrite(_MUTE_PIN, HIGH);
+  
 }
 
 
@@ -1100,9 +1260,27 @@ void handle_harp() {
       string_transient_envelope_array[i]->noteOn();
       AudioInterrupts();
       if (harp_started_notes[i] != 0) {
-        usbMIDI.sendNoteOff(harp_started_notes[i], harp_release_velocity, 1, harp_port);
+        usbMIDI.sendNoteOff(harp_started_notes[i], harp_release_velocity, HARP_CHANNEL, harp_port);
+        if (isLooperRecording)
+        {
+          midiEvent m;
+          m.timeStamp = curLooperTick;
+          m.status = MIDI_OFF;
+          m.data1 = harp_started_notes[i];
+          m.data2 = harp_release_velocity;      
+          addMidiLooperEvent(m, HARP_CHANNEL);
+        }
       }
-      usbMIDI.sendNoteOn(midi_base_note_transposed + current_harp_notes[i], harp_attack_velocity+volumeOffset, 1, harp_port);
+      if (isLooperRecording)
+      {
+        midiEvent m;
+        m.timeStamp = curLooperTick;
+        m.status = MIDI_ON;
+        m.data1 = midi_base_note_transposed + current_harp_notes[i];
+        m.data2 = harp_attack_velocity+volumeOffset;      
+        addMidiLooperEvent(m, HARP_CHANNEL);
+      }
+      usbMIDI.sendNoteOn(midi_base_note_transposed + current_harp_notes[i], harp_attack_velocity+volumeOffset, HARP_CHANNEL, harp_port);
       harp_started_notes[i] = midi_base_note_transposed + current_harp_notes[i];
     } else if (value == 1) {
       AudioNoInterrupts();
@@ -1111,7 +1289,16 @@ void handle_harp() {
       string_enveloppe_filter_array[i]->noteOff();
       AudioInterrupts();
       if (harp_started_notes[i] != 0) {
-        usbMIDI.sendNoteOff(harp_started_notes[i], harp_release_velocity, 1, harp_port);
+        if (isLooperRecording)
+          {
+            midiEvent m;
+            m.timeStamp = curLooperTick;
+            m.status = MIDI_OFF;
+            m.data1 = harp_started_notes[i];
+            m.data2 = harp_release_velocity;      
+            addMidiLooperEvent(m, HARP_CHANNEL);
+          }
+        usbMIDI.sendNoteOff(harp_started_notes[i], harp_release_velocity, HARP_CHANNEL, harp_port);
         harp_started_notes[i] = 0;
       }
     }
@@ -1176,8 +1363,26 @@ void update_harp_notes() {
     for (int i = 0; i < 12; i++) {
       current_harp_notes[i] = calculate_note_harp(i, slash_chord, sharp_active);
       if (change_held_strings && harp_started_notes[i] != 0) {
-        usbMIDI.sendNoteOff(harp_started_notes[i], harp_release_velocity, 1, harp_port);
-        usbMIDI.sendNoteOn(midi_base_note_transposed + current_harp_notes[i], harp_attack_velocity+volumeOffset, 1, harp_port);
+        if (isLooperRecording)
+        {
+          midiEvent m;
+          m.timeStamp = curLooperTick;
+          m.status = MIDI_OFF;
+          m.data1 = harp_started_notes[i];
+          m.data2 = harp_release_velocity;      
+          addMidiLooperEvent(m, HARP_CHANNEL);
+        }
+        usbMIDI.sendNoteOff(harp_started_notes[i], harp_release_velocity, HARP_CHANNEL, harp_port);
+        if (isLooperRecording)
+        {
+          midiEvent m;
+          m.timeStamp = curLooperTick;
+          m.status = MIDI_ON;
+          m.data1 = midi_base_note_transposed + current_harp_notes[i];
+          m.data2 = harp_attack_velocity+volumeOffset;      
+          addMidiLooperEvent(m, HARP_CHANNEL);
+        }        
+        usbMIDI.sendNoteOn(midi_base_note_transposed + current_harp_notes[i], harp_attack_velocity+volumeOffset, HARP_CHANNEL, harp_port);
         harp_started_notes[i] = midi_base_note_transposed + current_harp_notes[i];
         if (string_enveloppe_array[i]->isSustain()) {
           set_harp_voice_frequency(i, current_harp_notes[i]);
@@ -1196,7 +1401,16 @@ void stop_chord_notes() {
       chord_envelope_array[i]->noteOff();
       chord_envelope_filter_array[i]->noteOff();
       if (chord_started_notes[i] != 0) {
-        usbMIDI.sendNoteOff(chord_started_notes[i], chord_release_velocity, 1, chord_port);
+        if (isLooperRecording)
+        {
+          midiEvent m;
+          m.timeStamp = curLooperTick;
+          m.status = MIDI_OFF;
+          m.data1 = chord_started_notes[i];
+          m.data2 = chord_release_velocity;      
+          addMidiLooperEvent(m, CHORD_CHANNEL);
+        }       
+        usbMIDI.sendNoteOff(chord_started_notes[i], chord_release_velocity, CHORD_CHANNEL, chord_port);
         chord_started_notes[i] = 0;
       }
     }
@@ -1212,7 +1426,16 @@ void handle_rhythm_mode() {
       chord_envelope_array[i]->noteOff();
       chord_envelope_filter_array[i]->noteOff();
       if (chord_started_notes[i] != 0) {
-        usbMIDI.sendNoteOff(chord_started_notes[i], chord_release_velocity, 1, chord_port);
+        if (isLooperRecording)
+        {
+          midiEvent m;
+          m.timeStamp = curLooperTick;
+          m.status = MIDI_OFF;
+          m.data1 = chord_started_notes[i];
+          m.data2 = chord_release_velocity;      
+          addMidiLooperEvent(m, CHORD_CHANNEL);
+        }               
+        usbMIDI.sendNoteOff(chord_started_notes[i], chord_release_velocity, CHORD_CHANNEL, chord_port);
         chord_started_notes[i] = 0;
       }
     }
@@ -1421,6 +1644,11 @@ void HandleUSBHost()
       }
 
       // Send the mapped pitch-bend to MIDI (library accepts -8192..8191 style numbers)
+      midiEvent m;
+      m.data1 = d1;
+      m.data2 = d2;
+      m.status = channel == 2?MIDI_PITCH_UP:MIDI_PITCH_DOWN;
+      addMidiLooperEvent(m, CHORD_CHANNEL);
       usbMIDI.sendPitchBend(mapped, CHORD_CHANNEL);
 
       // Convert mapped (-8191..8191 or 0..8191) into a semitone offset and then a freq multiplier
@@ -1527,7 +1755,408 @@ void HandleUSBHost()
   
 }
 
+void transferRecording()
+{
+  int32_t offset = 0;
+  if (looperBuffer.size() == 0 && looperRecordBuffer.size() > 0)
+  {
+    Serial.printf("Correcting time\n");
+    uint32_t tRef = looperRecordBuffer[0].timeStamp;
+    offset = LOOPER_MIN_TIME - tRef;
+    //get offset
+  }
+  looperBuffer.reserve(looperBuffer.size() + looperRecordBuffer.size());
+  Serial.printf("Transferring %d data to total %d offset = %d\n", looperRecordBuffer.size(), looperBuffer.size()+looperRecordBuffer.size(), offset);
+  uint32_t old;
+  //todo delete after transferring
+  for (int i = 0; i < (int)looperRecordBuffer.size(); i++)
+  {
+      old = looperRecordBuffer[i].timeStamp;
+
+      // Adjust timestamp before transferring
+      looperRecordBuffer[i].timeStamp = (uint32_t)(looperRecordBuffer[i].timeStamp + offset);
+
+      // Move the element into looperBuffer (no copy if using std::move)
+      looperBuffer.push_back(std::move(looperRecordBuffer[i]));
+
+      //Serial.printf("old %u vs new timestamp is %u\n", old, looperBuffer.back().timeStamp);
+  }
+
+  isLooperRecording = false;
+  looperRecordBuffer.clear();
+  looperRecordBuffer.shrink_to_fit();
+  printMemoryUsage();
+}
+
+void resetLooper()
+{
+  isLooperToBeRecording = false;
+  isLooperToBeStarting = false;
+  isLooperActive = false;
+  isLooperRecording = false;
+  curLooperTick = 0;
+  looperBuffer.clear();
+  looperRecordBuffer.clear();
+}
+
+void generateLooperSignal()
+{
+  LooperSignalNotes.clear();
+  //looperRecordCnt = 0;
+  midiEvent m;
+  m.record = false;
+  m.timeStamp = 0;
+  m.status = MIDI_ON;
+  m.data1 = 60;
+  m.data2 = 127;
+  addMidiLooperEvent(m, KEYBOARD_CHANNEL, true);
+
+  m.timeStamp = 192*2; // half
+  m.status = MIDI_OFF | HARP_CHANNEL;
+  m.data1 = 60;
+  m.data2 = 127;
+  addMidiLooperEvent(m, KEYBOARD_CHANNEL, true);
+  
+  //m.timeStamp += 192*2; // half
+  m.status = MIDI_ON | HARP_CHANNEL;
+  m.data1 = 60;
+  m.data2 = 127;
+  addMidiLooperEvent(m, KEYBOARD_CHANNEL, true);
+
+  m.timeStamp += 192*2; // half
+  m.status = MIDI_OFF  | HARP_CHANNEL;
+  m.data1 = 60;
+  m.data2 = 127;
+  addMidiLooperEvent(m, KEYBOARD_CHANNEL, true);
+
+  //m.timeStamp += 192*2; // half
+  m.status = MIDI_ON  | HARP_CHANNEL;
+  m.data1 = 60;
+  m.data2 = 127;
+  addMidiLooperEvent(m, KEYBOARD_CHANNEL, true);
+
+  m.timeStamp += 192*2; // half
+  m.status = MIDI_OFF | HARP_CHANNEL;
+  m.data1 = 60;
+  m.data2 = 127;
+  addMidiLooperEvent(m, KEYBOARD_CHANNEL, true);
+
+  m.status = MIDI_ON | HARP_CHANNEL;
+  m.data1 = 72;
+  m.data2 = 127;
+  addMidiLooperEvent(m, KEYBOARD_CHANNEL, true);
+
+  m.timeStamp += 192; // quarter
+  m.status = MIDI_OFF | HARP_CHANNEL;
+  m.data1 = 72;
+  m.data2 = 0;
+  addMidiLooperEvent(m, KEYBOARD_CHANNEL, true);
+}
+
+template<typename SerialType>
+bool decodeCmd(SerialType& serialPort, String cmd, std::vector<String>* params) {
+  char buffer[64];
+  bool bTemp = false;
+  if (debug) {
+    Serial.printf("Serial command received is %s\n", cmd.c_str());
+  }
+  if (cmd == "LPSW")  //Looper start/stop write
+  {
+    if (params->size() < 1)  //missing parameter
+    {
+      serialPort.write("ER00\r\n");
+      return true;
+    }
+    if (atoi(params->at(0).c_str()) < 0 || atoi(params->at(0).c_str()) > 1 )
+    {
+      serialPort.write("ER01\r\n");
+      return true;
+    }
+    curLooperTick = 0;
+    //LooperNotes.clear();
+    isLooperToBeStarting = atoi(params->at(0).c_str()) == 1;
+    if (isLooperToBeStarting == 1)
+    {
+      isLooperToBeRecording = false;
+      if (isLooperRecording)
+      {
+        transferRecording(); //consider it that the user just created a shortcut
+      }
+      generateLooperSignal(); 
+
+    }
+    else
+    {
+      //noteAllOff();
+      isLooperActive = false;
+    }
+    serialPort.write("OK00\r\n");
+  } 
+  else if (cmd == "LPSR")  //Looper start/stop read
+  {
+    snprintf(buffer, sizeof(buffer), "OK00,%d\r\n", isLooperActive);
+    serialPort.write(buffer);
+  }
+
+  else if (cmd == "LPRW")  //Looper record start/stop write
+  {
+    if (params->size() < 1)  //missing parameter
+    {
+      serialPort.write("ER00\r\n");
+      return true;
+    }
+    if (atoi(params->at(0).c_str()) < 0 || atoi(params->at(0).c_str()) > 1 )
+    {
+      serialPort.write("ER01\r\n");
+      return true;
+    }
+    //LooperNotes.clear();
+    bool isLooperToBeRecordingNew = atoi(params->at(0).c_str()) == 1;
+    curLooperTick = 0;
+    Serial.printf("isLooperToBeRecordingNew = %d looperRecordBuffer.size() = %d\n", isLooperToBeRecordingNew?1:0, looperRecordBuffer.size());
+    if (isLooperToBeRecordingNew) //stopped->start or start->start
+    {
+      looperRecordBuffer.clear(); //reset record pointer
+      isLooperToBeStarting = false;
+      generateLooperSignal(); 
+    }
+    else
+    {
+      if (looperRecordBuffer.size() > 0)
+      { 
+        //to prevent them overlapping right away
+        transferRecording();
+      }
+      
+    }
+    isLooperToBeRecording = isLooperToBeRecordingNew;
+
+    serialPort.write("OK00\r\n");
+  } 
+
+  else if (cmd == "LPRR")  //Looper record start/stop read
+  {
+    snprintf(buffer, sizeof(buffer), "OK00,%d\r\n", isLooperRecording);
+    serialPort.write(buffer);
+  }
+
+  else if (cmd == "LPCL")  //Looper Clear
+  {
+    //noteAllOff();
+    resetLooper();
+    serialPort.write("OK00\r\n");
+  } 
+  return true;
+}
+
+void advanceLooperSignal() 
+{
+  int channel = 0;
+  for (size_t i = 0; i < LooperSignalNotes.size();) {
+    if (LooperSignalNotes[i].timeStamp == curLooperTick) 
+    {
+      auto &m = LooperSignalNotes[i];
+      channel = m.status & 0xf;
+      if ((m.status & 0xf0) == MIDI_ON) 
+      {
+        usbMIDI.sendNoteOn(m.data1, m.data2, channel);
+      }
+      else if ((m.status & 0xf0) == MIDI_OFF) 
+      {
+        usbMIDI.sendNoteOff(m.data1, m.data2, channel);
+      }
+      else
+      {
+
+      }
+      LooperSignalNotes.erase(LooperSignalNotes.begin() + i);
+    }
+    else 
+    {
+      i++;
+    }
+
+  }
+  if (LooperSignalNotes.size() == 0)
+  {
+    curLooperCnt = -1; //need to overflow due to loop behavior 
+    isLooperActive = false;
+    isLooperRecording = false;
+    if (isLooperToBeRecording)
+    {
+      isLooperRecording = true;
+    }
+    else if (isLooperToBeStarting)
+    {
+      isLooperActive = true;
+    }
+    curLooperTick = 0;
+  }
+}
+
+void advanceLooper() {
+  int channel = 0;
+  for (size_t i = 0; i < looperBuffer.size();i++) {
+    if (looperBuffer[i].timeStamp == curLooperTick) 
+    {
+      curLooperCnt++;
+      auto &m = looperBuffer[i];
+      channel = m.status & 0xf;
+      if ((m.status & 0xf0) == MIDI_ON) 
+      {
+        usbMIDI.sendNoteOn(m.data1, m.data2, channel);
+      }
+      else if ((m.status & 0xf0) == MIDI_OFF) 
+      {
+        usbMIDI.sendNoteOff(m.data1, m.data2, channel);
+      }
+      
+      else if ((m.status & 0xf0) == MIDI_PITCH_UP || (m.status & 0xf0) == MIDI_PITCH_DOWN) 
+      {
+        int value = ((m.data2 << 7) | m.data1) - 8192;
+        value = constrain(value + 512, -8192, 8191);
+        int mult = 1;
+        if (m.status == MIDI_PITCH_DOWN)
+        {
+          mult = -1;
+        }
+        usbMIDI.sendPitchBend(value * mult, channel);
+      }
+
+    }
+  }
+}
+
+
+// Interrupt Service Routine: set flag to send clock
+
+
+int tickCount = 0;
+void onTick64() {
+  tickCount++;
+
+  
+  if (LooperSignalNotes.size() > 0)
+  {
+    //Serial.printf("LooperSignalNotes %d vs %d\n", LooperSignalNotes.size(), curLooperTick);
+    advanceLooperSignal();
+    curLooperTick++;
+  }
+  //loop for handling playback
+  if (isLooperActive || isLooperRecording)
+  {
+    //Serial.printf("7 curLooperTick %d, curLooperCnt %d, looperCnt %d\n",curLooperTick, curLooperCnt,looperCnt );
+    if (looperBuffer.size() > 0 && curLooperCnt < looperBuffer.size())
+    {
+      //Serial.printf("Looper looperCnt = %d, curLooperCnt = %d\n", looperCnt, curLooperCnt);
+
+      if (looperBuffer.size() > 0)
+      {
+        advanceLooper();
+      }
+    }
+
+    curLooperTick++;
+    bool shouldReset = false;
+    if (curLooperTick > MAX_LOOPER_TIME)
+    {
+      shouldReset = true;
+      curLooperCnt = 0;
+    } 
+    else if (isLooperRecording)
+    {
+      //Serial.printf("3 curLooperCnt %d, looperCnt %d\n",curLooperCnt,looperCnt );
+    }
+    else if (isLooperActive && looperBuffer.size() == 0) //handle case where record->record is done
+    {
+      Serial.printf("2 curLooperCnt %d, looperCnt %d\n",curLooperCnt,looperBuffer.size() );
+      //do nothing
+    }
+    else if (isLooperActive && curLooperCnt >= looperBuffer.size())
+    {
+      Serial.printf("curLooperCnt %d, looperCnt %d\n",curLooperCnt,looperBuffer.size() );
+      shouldReset = true;
+      curLooperCnt= 0;
+    }
+    
+    if (shouldReset)
+    {
+      Serial.printf("5 curLooperTick %d, looperCnt %d\n",curLooperCnt,looperBuffer.size() );
+      curLooperTick = 0;
+    }
+  }
+  // Optional: wrap counter
+  if (tickCount >= 4800) tickCount = 0;
+}
+#define MAX_BUFFER_SIZE 32
+char dataBuffer4[MAX_BUFFER_SIZE + 1];  // +1 for null terminator
+
+uint8_t bufferLen4 = 0;
+template<typename SerialType>
+void checkSerialCmd(SerialType& serialPort, char* buffer, uint8_t& bufferLen, int isBT) {
+  std::vector<String> params;
+  while (serialPort.available()) {
+    char c = serialPort.read();
+
+    // Prevent buffer overflow
+    if (bufferLen < 255) {
+      buffer[bufferLen++] = c;
+    }
+
+    // Look for command terminator
+    if (c == '\n' && bufferLen >= 2 && buffer[bufferLen - 2] == '\r') {
+      buffer[bufferLen] = '\0';  // Null-terminate the string
+
+      // Optionally: remove trailing \r\n for cleaner parsing
+      buffer[bufferLen - 2] = '\0';
+
+      // --- Parse Command ---
+      char* cmd = strtok(buffer, ",");
+      if (cmd && strlen(cmd) == 4) {
+        if (debug) {
+          serialPort.printf("Received %d:CMD: %s", isBT, cmd);
+        }
+
+        //int paramIndex = 1;
+        char* token;
+        while ((token = strtok(NULL, ",")) != NULL) {
+          //serialPort.printf("Param %d: %s\n", paramIndex++, token);
+          if (debug) {
+            serialPort.printf(",%s", token);
+          }
+          params.push_back(String(token));
+        }
+        if (debug)
+          serialPort.printf("\n");
+        // Respond with OK
+
+      } else {
+        
+
+        
+        if (isBT == 0)
+        {
+          Serial.printf("I strangely got %s\n", buffer);
+          serialPort.write("HA? ER98\r\n");
+        }
+      }
+      if (!decodeCmd(serialPort, String(cmd), &params)) 
+      {
+        serialPort.write("ER99\r\n");
+        Serial.printf("DecodeCmd failed for %s\n",cmd);
+      }
+      // Reset buffer for next command
+      bufferLen = 0;
+    }
+  }
+}
 void loop() {
+  if (sendClockTick) {
+    sendClockTick = false;
+    onTick64();
+  }
+  checkSerialCmd(Serial, dataBuffer4, bufferLen4, 0);  //handling of USB serial
+  
   // Process incoming MIDI messages
   if (usbMIDI.read()) {
     processMIDI();
@@ -1583,6 +2212,7 @@ void loop() {
     update_chord_notes(); // Replaced updateNotes() with update_chord_notes()
     update_harp_notes();  // Added call to update_harp_notes()
     trigger_chord_notes();
+
   }
 
   // Handle chord button transitions
@@ -1590,4 +2220,10 @@ void loop() {
 
   // Handle harp functions
   handle_harp();
+  if (!memShown)
+  {
+    memShown = true;
+    printMemoryUsage();
+  }
+
 }
