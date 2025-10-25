@@ -15,8 +15,18 @@
 #include <USBHost_t36.h>  // Teensy USB Host library
 #include <MIDI.h>
 bool debug = true;
+enum SignalType_enum
+{
+  LoopStartStopSignal = 0,
+  LoopRecordSignal = 1,
+  LoopClearSignal = 2
+};
 
-
+uint32_t upLastPressTime;
+uint32_t downLastPressTime;
+bool upPressed = false;
+bool downPressed = false;
+bool listenShift = false;
 typedef struct _MidiEvent {
   uint32_t timeStamp;
   uint8_t status;
@@ -29,6 +39,7 @@ bool isLooperToBeRecording = false;
 bool isLooperToBeStarting = false;
 bool isLooperActive = false; //looper is playing
 bool isLooperRecording = false; //looper is recording
+bool isLooperClearing = false;//
 uint32_t curLooperTick = 0; //current time in terms of tick
 uint32_t curLooperCnt = 0;
 
@@ -1228,8 +1239,18 @@ void handle_chords_button() {
   if (sharp_transition > 1 && current_line != -1) {
     button_pushed = true;
   }
+  bool oldSharp_active = sharp_active;
   sharp_active = chord_matrix_array[0].read_value();
-
+  if (sharp_active && !oldSharp_active)
+  {
+    Serial.printf("Sharp pressed\n");
+    listenShift = true;
+  }
+  else if (!sharp_active && listenShift)
+  {
+    Serial.printf("Sharp unpressed\n");
+    listenShift = false;
+  }
   for (int i = 1; i < 22; i++) {
     int value = chord_matrix_array[i].read_transition();
     if (value > 1 && !inhibit_button) {
@@ -1462,6 +1483,237 @@ void handle_continuous_mode() {
   }
 }
 
+void generateLooperSignal(SignalType_enum mode)
+{
+  
+  LooperSignalNotes.clear();
+  //looperRecordCnt = 0;
+  midiEvent m;
+  if (mode == LoopStartStopSignal) //start/stop
+  {
+    m.record = false;
+    m.timeStamp = 0;
+    m.status = MIDI_ON;
+    m.data1 = 60;
+    m.data2 = 127;
+    addMidiLooperEvent(m, KEYBOARD_CHANNEL, true);
+
+    m.timeStamp = 192*2; // half
+    m.status = MIDI_OFF | HARP_CHANNEL;
+    m.data1 = 60;
+    m.data2 = 127;
+    addMidiLooperEvent(m, KEYBOARD_CHANNEL, true);
+    
+    //m.timeStamp += 192*2; // half
+    m.status = MIDI_ON | HARP_CHANNEL;
+    m.data1 = 60;
+    m.data2 = 127;
+    addMidiLooperEvent(m, KEYBOARD_CHANNEL, true);
+
+    m.timeStamp += 192*2; // half
+    m.status = MIDI_OFF  | HARP_CHANNEL;
+    m.data1 = 60;
+    m.data2 = 127;
+    addMidiLooperEvent(m, KEYBOARD_CHANNEL, true);
+
+    //m.timeStamp += 192*2; // half
+    m.status = MIDI_ON  | HARP_CHANNEL;
+    m.data1 = 60;
+    m.data2 = 127;
+    addMidiLooperEvent(m, KEYBOARD_CHANNEL, true);
+
+    m.timeStamp += 192*2; // half
+    m.status = MIDI_OFF | HARP_CHANNEL;
+    m.data1 = 60;
+    m.data2 = 127;
+    addMidiLooperEvent(m, KEYBOARD_CHANNEL, true);
+
+    m.status = MIDI_ON | HARP_CHANNEL;
+    m.data1 = 72;
+    m.data2 = 127;
+    addMidiLooperEvent(m, KEYBOARD_CHANNEL, true);
+
+    m.timeStamp += 192; // quarter
+    m.status = MIDI_OFF | HARP_CHANNEL;
+    m.data1 = 72;
+    m.data2 = 0;
+    addMidiLooperEvent(m, KEYBOARD_CHANNEL, true);
+  }
+  else if (mode == LoopClearSignal)
+  {
+    m.record = false;
+    m.timeStamp = 0;
+    m.status = MIDI_ON;
+    m.data1 = 60;
+    m.data2 = 127;
+    addMidiLooperEvent(m, KEYBOARD_CHANNEL, true);
+
+    m.record = false;
+    m.timeStamp = 0;
+    m.status = MIDI_ON;
+    m.data1 = 61;
+    m.data2 = 127;
+    addMidiLooperEvent(m, KEYBOARD_CHANNEL, true);
+
+    m.record = false;
+    m.timeStamp = 0;
+    m.status = MIDI_ON;
+    m.data1 = 62;
+    m.data2 = 127;
+    addMidiLooperEvent(m, KEYBOARD_CHANNEL, true);
+
+    m.timeStamp = 192*2; // half
+    m.status = MIDI_OFF | HARP_CHANNEL;
+    m.data1 = 60;
+    m.data2 = 127;
+    addMidiLooperEvent(m, KEYBOARD_CHANNEL, true);
+    
+    m.timeStamp = 192*2; // half
+    m.status = MIDI_OFF | HARP_CHANNEL;
+    m.data1 = 61;
+    m.data2 = 127;
+    addMidiLooperEvent(m, KEYBOARD_CHANNEL, true);
+
+    m.timeStamp = 192*2; // half
+    m.status = MIDI_OFF | HARP_CHANNEL;
+    m.data1 = 62;
+    m.data2 = 127;
+    addMidiLooperEvent(m, KEYBOARD_CHANNEL, true);
+
+  }
+  else //record
+  {
+    m.record = false;
+    m.timeStamp = 0;
+    m.status = MIDI_ON;
+    m.data1 = 72;
+    m.data2 = 127;
+    addMidiLooperEvent(m, KEYBOARD_CHANNEL, true);
+
+    m.timeStamp = 192*2; // half
+    m.status = MIDI_OFF | HARP_CHANNEL;
+    m.data1 = 72;
+    m.data2 = 127;
+    addMidiLooperEvent(m, KEYBOARD_CHANNEL, true);
+    
+    //m.timeStamp += 192*2; // half
+    m.status = MIDI_ON | HARP_CHANNEL;
+    m.data1 = 60;
+    m.data2 = 127;
+    addMidiLooperEvent(m, KEYBOARD_CHANNEL, true);
+
+    m.timeStamp += 192*2; // half
+    m.status = MIDI_OFF  | HARP_CHANNEL;
+    m.data1 = 60;
+    m.data2 = 127;
+    addMidiLooperEvent(m, KEYBOARD_CHANNEL, true);
+
+    //m.timeStamp += 192*2; // half
+    m.status = MIDI_ON  | HARP_CHANNEL;
+    m.data1 = 72;
+    m.data2 = 127;
+    addMidiLooperEvent(m, KEYBOARD_CHANNEL, true);
+
+    m.timeStamp += 192*2; // half
+    m.status = MIDI_OFF | HARP_CHANNEL;
+    m.data1 = 72;
+    m.data2 = 127;
+    addMidiLooperEvent(m, KEYBOARD_CHANNEL, true);
+
+    m.status = MIDI_ON | HARP_CHANNEL;
+    m.data1 = 60;
+    m.data2 = 127;
+    addMidiLooperEvent(m, KEYBOARD_CHANNEL, true);
+
+    m.timeStamp += 192; // quarter
+    m.status = MIDI_OFF | HARP_CHANNEL;
+    m.data1 = 60;
+    m.data2 = 0;
+    addMidiLooperEvent(m, KEYBOARD_CHANNEL, true);
+  }
+}
+
+void transferRecording()
+{
+  int32_t offset = 0;
+  if (looperBuffer.size() == 0 && looperRecordBuffer.size() > 0)
+  {
+    Serial.printf("Correcting time\n");
+    uint32_t tRef = looperRecordBuffer[0].timeStamp;
+    offset = LOOPER_MIN_TIME - tRef;
+    //get offset
+  }
+  looperBuffer.reserve(looperBuffer.size() + looperRecordBuffer.size());
+  Serial.printf("Transferring %d data to total %d offset = %d\n", looperRecordBuffer.size(), looperBuffer.size()+looperRecordBuffer.size(), offset);
+  uint32_t old;
+  //todo delete after transferring
+  for (int i = 0; i < (int)looperRecordBuffer.size(); i++)
+  {
+      old = looperRecordBuffer[i].timeStamp;
+
+      // Adjust timestamp before transferring
+      looperRecordBuffer[i].timeStamp = (uint32_t)(looperRecordBuffer[i].timeStamp + offset);
+
+      // Move the element into looperBuffer (no copy if using std::move)
+      looperBuffer.push_back(std::move(looperRecordBuffer[i]));
+
+      //Serial.printf("old %u vs new timestamp is %u\n", old, looperBuffer.back().timeStamp);
+  }
+
+  isLooperRecording = false;
+  looperRecordBuffer.clear();
+  looperRecordBuffer.shrink_to_fit();
+  printMemoryUsage();
+}
+
+
+void loopDoStartStop()
+{
+  
+  isLooperToBeStarting = !isLooperActive;
+  Serial.printf("isLooperToBeStarting=%d\n", isLooperToBeStarting);
+  curLooperTick = 0;
+  if (isLooperToBeStarting)
+  {
+    isLooperToBeRecording = false;
+    if (isLooperRecording)
+    {
+      transferRecording(); //consider it that the user just created a shortcut
+    }
+    generateLooperSignal(LoopStartStopSignal); 
+
+  }
+  else
+  {
+    isLooperActive = false;
+  }
+}
+void loopDoRecord()
+{
+    curLooperTick = 0;
+    looperRecordBuffer.clear(); //reset record pointer
+    isLooperToBeStarting = false;
+    isLooperToBeRecording = true;
+    generateLooperSignal(LoopRecordSignal); 
+}
+
+void resetLooper()
+{
+  isLooperClearing = false;
+  isLooperToBeRecording = false;
+  isLooperToBeStarting = false;
+  isLooperActive = false;
+  isLooperRecording = false;
+  curLooperTick = 0;
+  looperBuffer.clear();
+  looperRecordBuffer.clear();
+}
+
+void loopDoClear()
+{
+  resetLooper();
+  generateLooperSignal(LoopClearSignal);
+}
 void handle_hold_button() {
   uint8_t hold_transition = hold_button.read_transition();
   if (hold_transition == 2) {
@@ -1504,24 +1756,107 @@ void handle_hold_button() {
 }
 
 void handle_preset_change() {
-  if (up_button.read_transition() > 1) {
-    Serial.println("Switching to next preset");
-    if (!sysex_controler_connected && flag_save_needed) {
-      save_config(current_bank_number, false);
+  uint8_t trans;
+  if (sharp_active && listenShift)
+  {
+    //check how long up or down has been pressed
+    trans = up_button.read_transition();
+    if (trans == 2)
+    {
+      //start count for up
+      Serial.printf("Up pressed\n");
+      upLastPressTime = millis();
+      upPressed = true;
     }
-    current_bank_number = (current_bank_number + 1) % 12;
-    load_config(current_bank_number);
+    else if (trans == 1)
+    {
+      Serial.printf("Up unpressed\n");
+      upPressed = false;
+    }
+    else if (upPressed && trans == 0) // no transition
+    {
+      //determine if hold is enough
+      if (millis() - upLastPressTime > LOOPER_BUTTON_HOLD_TIME)
+      {
+        listenShift = false;
+        if (downPressed && millis() - downLastPressTime > LOOPER_BUTTON_SUB_HOLD_TIME)
+        {
+          
+          Serial.printf("I should do Looper Clear here\n");
+          downPressed = false;          
+          loopDoClear();
+        }
+        else
+        {
+          Serial.printf("I should do Looper Start/Stop here\n");
+          loopDoStartStop();
+        }
+        upPressed = false;
+      }
+    }
+    else
+    {
+
+    }
+    trans = down_button.read_transition();
+    if (trans == 2)
+    {
+      Serial.printf("Down pressed\n");
+      //start count for down
+      downLastPressTime = millis();
+      downPressed = true;
+    }
+    else if (trans == 1)
+    {
+      Serial.printf("Down unpressed\n");
+      downPressed = false;
+    }
+    else if (downPressed && trans == 0)
+    {
+      if (millis() - downLastPressTime > LOOPER_BUTTON_HOLD_TIME)
+      {
+        listenShift = false;
+        if (upPressed && millis() - upLastPressTime > LOOPER_BUTTON_SUB_HOLD_TIME)
+        {
+          Serial.printf("I should do Looper Clear here\n");
+          upPressed = false;
+          loopDoClear();
+        }
+        else
+        {
+          Serial.printf("I should do Looper Record here\n");
+          loopDoRecord();
+        }
+        downPressed = false;
+      }
+    }
+    else
+    {
+
+    }
+    
   }
-  if (down_button.read_transition() > 1) {
-    Serial.println("Switching to last preset");
-    if (!sysex_controler_connected && flag_save_needed) {
-      save_config(current_bank_number, false);
+  else
+  {
+    if (up_button.read_transition() > 1) {
+      Serial.println("Switching to next preset");
+      if (!sysex_controler_connected && flag_save_needed) {
+        save_config(current_bank_number, false);
+      }
+      current_bank_number = (current_bank_number + 1) % 12;
+      load_config(current_bank_number);
     }
-    current_bank_number = (current_bank_number - 1);
-    if (current_bank_number == -1) {
-      current_bank_number = 11;
+    if (down_button.read_transition() > 1) {
+      Serial.println("Switching to last preset");
+      if (!sysex_controler_connected && flag_save_needed) {
+        save_config(current_bank_number, false);
+      }
+      current_bank_number = (current_bank_number - 1);
+      if (current_bank_number == -1) {
+        current_bank_number = 11;
+      }
+      load_config(current_bank_number);
     }
-    load_config(current_bank_number);
   }
 }
 
@@ -1755,103 +2090,8 @@ void HandleUSBHost()
   
 }
 
-void transferRecording()
-{
-  int32_t offset = 0;
-  if (looperBuffer.size() == 0 && looperRecordBuffer.size() > 0)
-  {
-    Serial.printf("Correcting time\n");
-    uint32_t tRef = looperRecordBuffer[0].timeStamp;
-    offset = LOOPER_MIN_TIME - tRef;
-    //get offset
-  }
-  looperBuffer.reserve(looperBuffer.size() + looperRecordBuffer.size());
-  Serial.printf("Transferring %d data to total %d offset = %d\n", looperRecordBuffer.size(), looperBuffer.size()+looperRecordBuffer.size(), offset);
-  uint32_t old;
-  //todo delete after transferring
-  for (int i = 0; i < (int)looperRecordBuffer.size(); i++)
-  {
-      old = looperRecordBuffer[i].timeStamp;
 
-      // Adjust timestamp before transferring
-      looperRecordBuffer[i].timeStamp = (uint32_t)(looperRecordBuffer[i].timeStamp + offset);
 
-      // Move the element into looperBuffer (no copy if using std::move)
-      looperBuffer.push_back(std::move(looperRecordBuffer[i]));
-
-      //Serial.printf("old %u vs new timestamp is %u\n", old, looperBuffer.back().timeStamp);
-  }
-
-  isLooperRecording = false;
-  looperRecordBuffer.clear();
-  looperRecordBuffer.shrink_to_fit();
-  printMemoryUsage();
-}
-
-void resetLooper()
-{
-  isLooperToBeRecording = false;
-  isLooperToBeStarting = false;
-  isLooperActive = false;
-  isLooperRecording = false;
-  curLooperTick = 0;
-  looperBuffer.clear();
-  looperRecordBuffer.clear();
-}
-
-void generateLooperSignal()
-{
-  LooperSignalNotes.clear();
-  //looperRecordCnt = 0;
-  midiEvent m;
-  m.record = false;
-  m.timeStamp = 0;
-  m.status = MIDI_ON;
-  m.data1 = 60;
-  m.data2 = 127;
-  addMidiLooperEvent(m, KEYBOARD_CHANNEL, true);
-
-  m.timeStamp = 192*2; // half
-  m.status = MIDI_OFF | HARP_CHANNEL;
-  m.data1 = 60;
-  m.data2 = 127;
-  addMidiLooperEvent(m, KEYBOARD_CHANNEL, true);
-  
-  //m.timeStamp += 192*2; // half
-  m.status = MIDI_ON | HARP_CHANNEL;
-  m.data1 = 60;
-  m.data2 = 127;
-  addMidiLooperEvent(m, KEYBOARD_CHANNEL, true);
-
-  m.timeStamp += 192*2; // half
-  m.status = MIDI_OFF  | HARP_CHANNEL;
-  m.data1 = 60;
-  m.data2 = 127;
-  addMidiLooperEvent(m, KEYBOARD_CHANNEL, true);
-
-  //m.timeStamp += 192*2; // half
-  m.status = MIDI_ON  | HARP_CHANNEL;
-  m.data1 = 60;
-  m.data2 = 127;
-  addMidiLooperEvent(m, KEYBOARD_CHANNEL, true);
-
-  m.timeStamp += 192*2; // half
-  m.status = MIDI_OFF | HARP_CHANNEL;
-  m.data1 = 60;
-  m.data2 = 127;
-  addMidiLooperEvent(m, KEYBOARD_CHANNEL, true);
-
-  m.status = MIDI_ON | HARP_CHANNEL;
-  m.data1 = 72;
-  m.data2 = 127;
-  addMidiLooperEvent(m, KEYBOARD_CHANNEL, true);
-
-  m.timeStamp += 192; // quarter
-  m.status = MIDI_OFF | HARP_CHANNEL;
-  m.data1 = 72;
-  m.data2 = 0;
-  addMidiLooperEvent(m, KEYBOARD_CHANNEL, true);
-}
 
 template<typename SerialType>
 bool decodeCmd(SerialType& serialPort, String cmd, std::vector<String>* params) {
@@ -1882,7 +2122,7 @@ bool decodeCmd(SerialType& serialPort, String cmd, std::vector<String>* params) 
       {
         transferRecording(); //consider it that the user just created a shortcut
       }
-      generateLooperSignal(); 
+      generateLooperSignal(LoopStartStopSignal);
 
     }
     else
@@ -1918,7 +2158,7 @@ bool decodeCmd(SerialType& serialPort, String cmd, std::vector<String>* params) 
     {
       looperRecordBuffer.clear(); //reset record pointer
       isLooperToBeStarting = false;
-      generateLooperSignal(); 
+      generateLooperSignal(LoopRecordSignal);
     }
     else
     {
@@ -1944,6 +2184,8 @@ bool decodeCmd(SerialType& serialPort, String cmd, std::vector<String>* params) 
   {
     //noteAllOff();
     resetLooper();
+    isLooperClearing = true;
+    generateLooperSignal(LoopClearSignal);
     serialPort.write("OK00\r\n");
   } 
   return true;
@@ -1982,12 +2224,17 @@ void advanceLooperSignal()
     curLooperCnt = -1; //need to overflow due to loop behavior 
     isLooperActive = false;
     isLooperRecording = false;
-    if (isLooperToBeRecording)
+    if (isLooperClearing)
+    {
+      isLooperClearing = false;
+    }
+    else if (isLooperToBeRecording)
     {
       isLooperRecording = true;
     }
     else if (isLooperToBeStarting)
     {
+      Serial.printf("Looper is starting officially\n");
       isLooperActive = true;
     }
     curLooperTick = 0;
@@ -2043,7 +2290,7 @@ void onTick64() {
     curLooperTick++;
   }
   //loop for handling playback
-  if (isLooperActive || isLooperRecording)
+  if (isLooperActive || isLooperRecording || isLooperClearing)
   {
     //Serial.printf("7 curLooperTick %d, curLooperCnt %d, looperCnt %d\n",curLooperTick, curLooperCnt,looperCnt );
     if (looperBuffer.size() > 0 && curLooperCnt < looperBuffer.size())
