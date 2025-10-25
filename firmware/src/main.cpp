@@ -71,10 +71,12 @@ void addMidiLooperEvent(midiEvent m, uint8_t channel, bool isSignal = false)
     {
       return; //do nothing
     }
+    looperRecordBuffer.reserve(1);
     looperRecordBuffer.push_back(m);
   }
   else
   {
+    LooperSignalNotes.reserve(1);
     LooperSignalNotes.push_back(m);
   }
   
@@ -1673,6 +1675,7 @@ void loopDoStartStop()
   isLooperToBeStarting = !isLooperActive;
   Serial.printf("isLooperToBeStarting=%d\n", isLooperToBeStarting);
   curLooperTick = 0;
+  curLooperCnt = 0;
   if (isLooperToBeStarting)
   {
     isLooperToBeRecording = false;
@@ -1690,6 +1693,7 @@ void loopDoStartStop()
 }
 void loopDoRecord()
 {
+    curLooperCnt = 0;
     curLooperTick = 0;
     looperRecordBuffer.clear(); //reset record pointer
     isLooperToBeStarting = false;
@@ -2221,6 +2225,7 @@ void advanceLooperSignal()
   }
   if (LooperSignalNotes.size() == 0)
   {
+    Serial.printf("Post LooperSignal\n");
     curLooperCnt = -1; //need to overflow due to loop behavior 
     isLooperActive = false;
     isLooperRecording = false;
@@ -2228,9 +2233,10 @@ void advanceLooperSignal()
     {
       isLooperClearing = false;
     }
-    else if (isLooperToBeRecording)
+    if (isLooperToBeRecording)
     {
       isLooperRecording = true;
+      Serial.printf("Looper is Recording officially\n");
     }
     else if (isLooperToBeStarting)
     {
@@ -2238,6 +2244,7 @@ void advanceLooperSignal()
       isLooperActive = true;
     }
     curLooperTick = 0;
+    curLooperCnt = 0;
   }
 }
 
@@ -2290,42 +2297,48 @@ void onTick64() {
     curLooperTick++;
   }
   //loop for handling playback
-  if (isLooperActive || isLooperRecording || isLooperClearing)
+  else if (isLooperActive || isLooperRecording || isLooperClearing)
   {
-    //Serial.printf("7 curLooperTick %d, curLooperCnt %d, looperCnt %d\n",curLooperTick, curLooperCnt,looperCnt );
+    //Serial.printf("7 curLooperTick %d, curLooperCnt %d, looperBuffer.size() %d\n",curLooperTick, curLooperCnt,looperBuffer.size() );
     if (looperBuffer.size() > 0 && curLooperCnt < looperBuffer.size())
     {
       //Serial.printf("Looper looperCnt = %d, curLooperCnt = %d\n", looperCnt, curLooperCnt);
 
-      if (looperBuffer.size() > 0)
+      if (LooperSignalNotes.size() == 0 && looperBuffer.size() > 0)
       {
         advanceLooper();
       }
     }
-
     curLooperTick++;
     bool shouldReset = false;
-    if (curLooperTick > MAX_LOOPER_TIME)
+    if (LooperSignalNotes.size() != 0)
     {
-      shouldReset = true;
-      curLooperCnt = 0;
-    } 
-    else if (isLooperRecording)
-    {
-      //Serial.printf("3 curLooperCnt %d, looperCnt %d\n",curLooperCnt,looperCnt );
+
     }
-    else if (isLooperActive && looperBuffer.size() == 0) //handle case where record->record is done
+    else
     {
-      Serial.printf("2 curLooperCnt %d, looperCnt %d\n",curLooperCnt,looperBuffer.size() );
-      //do nothing
+
+      if (curLooperTick > MAX_LOOPER_TIME)
+      {
+        shouldReset = true;
+        curLooperCnt = 0;
+      } 
+      else if (isLooperRecording)
+      {
+        //Serial.printf("3 curLooperCnt %d, looperCnt %d\n",curLooperCnt,looperCnt );
+      }
+      else if (isLooperActive && looperBuffer.size() == 0) //handle case where record->record is done
+      {
+        Serial.printf("2 curLooperCnt %d, looperCnt %d\n",curLooperCnt,looperBuffer.size() );
+        //do nothing
+      }
+      else if (isLooperActive && curLooperCnt >= looperBuffer.size())
+      {
+        Serial.printf("curLooperCnt %d, looperCnt %d\n",curLooperCnt,looperBuffer.size() );
+        shouldReset = true;
+        curLooperCnt= 0;
+      }
     }
-    else if (isLooperActive && curLooperCnt >= looperBuffer.size())
-    {
-      Serial.printf("curLooperCnt %d, looperCnt %d\n",curLooperCnt,looperBuffer.size() );
-      shouldReset = true;
-      curLooperCnt= 0;
-    }
-    
     if (shouldReset)
     {
       Serial.printf("5 curLooperTick %d, looperCnt %d\n",curLooperCnt,looperBuffer.size() );
